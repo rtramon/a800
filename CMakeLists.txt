@@ -46,14 +46,15 @@ project(a800v1 C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
 
+# Add executable. Default name is the project name, version 0.1
 add_executable(a800v1   
 rom.cc
 ewoz.cc
 core1_main.cc
 system.cc
 mos65C02.cc
+mos65C02_pio.cc
 m6520.cc
 menu.cc
 memory.cc
@@ -85,6 +86,7 @@ pico_set_program_version(a800v1 "0.1")
 
 # Generate PIO header
 #pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
+pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/sm0_memory_emulation_with_clock.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(a800v1 1)
@@ -122,8 +124,13 @@ target_compile_definitions(a800v1 PUBLIC
         #EMU_M6502=1
         #SALT=1
 
+        #OPTION_SOUND
+        OPTION_POKEY_AUDIO
+
         OPTION_MODE4_EXPERIMENTAL
         OPTION_MODE6_EXPERIMENTAL
+
+        OPTION_6502_PIO
 
         #OPTION_TMDS
 ) 

@@ -1,3 +1,5 @@
+#if !defined(OPTION_6502_PIO)
+
 #include "mos65C02.h"
 
 #include <ctype.h>
@@ -150,7 +152,6 @@ void __m6502_func(mos65c02_reset)() {
 uint16_t prev_address;
 
 void __m6502_func(mos65c02_tick)() {
-    // uint8_t data;
     uint data;
     // set output enable of required latch first, to use
     // clocks for usefull work
@@ -200,6 +201,5 @@ void __m6502_func(mos65c02_tick)() {
 
         mem_write(address, data);
     }
-
-    // prev_address = address;
 }
+#endif

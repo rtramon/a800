@@ -34,7 +34,6 @@ uint8_t audc1_, audc2_, audc3_, audc4_;
 uint8_t audctl_;
 int cnt1_, cnt2_, cnt3_, cnt4_;
 uint8_t aud_out;
-uint32_t start;
 
 static int serout_delay;
 static int serxmt_delay;
@@ -113,12 +112,14 @@ void pokey_reset() {
     serout_delay = 0;
     serxmt_delay = 0;
 
+#if defined OPTION_POKEY_AUDIO
     // initialize GPIO20 as audio output
-    // gpio_init(20);
-    // gpio_set_dir(20, GPIO_OUT);
-    // gpio_put(20, 0);
+    gpio_init(20);
+    gpio_set_dir(20, GPIO_OUT);
+    gpio_put(20, 0);
     // gpio_set_dir_out_masked((1ul << 20));
     // gpio_clr_mask(1ul << 20);
+#endif
 }
 
 uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
@@ -175,14 +176,14 @@ void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
         case AUDF1:
             audf1_ = data;
 // printf("W POKEY AUDF1 %02X\n", data);
-#if defined(OPTION_AUDIO)
+#if defined(OPTION_SOUND)
             play_pokey_sound(20, audf1_);
 #endif
             break;
         case AUDC1:
             // printf("W POKEY AUDC1 %02X\n", data);
             audc1_ = data;
-#if defined(OPTION_AUDIO)
+#if defined(OPTION_SOUND)
             if ((audc1_ & 0x0F) == 0) stop_sound(20);
 #endif
             break;
@@ -317,7 +318,7 @@ void __not_in_flash_func(pokey_tick)() {
 
     // return;
 
-    // #ifdef AUDIO
+#if defined(OPTION_POKEY_AUDIO)
     // timers
     // timers count down to zero
     // timers (audio channels) 1, 2 and 4 can generate an IRQ
@@ -328,47 +329,42 @@ void __not_in_flash_func(pokey_tick)() {
     // chan 3 + 4 linked mode
 
     // slow clock frequency select audctl bit 0 ; not supported
-    // for now only the slow 15kHZ audio clock is emulated
-    // static uint clock_tick = 0;
-    // if ((clock_tick++ % 114) == 0) {
-    //   cnt1_ -= clock_step;
-    //   cnt2_ -= clock_step;
+    // for now only the slow 64kHZ audio clock is emulated
+    static uint clock_tick = 0;
+    if ((clock_tick++ % 23) == 0) {
+        cnt1_ -= clock_step;
+        cnt2_ -= clock_step;
 
-    //   if (cnt1_ <= 0) {
-    //     cnt1_ = audf1_;
-    //     if (audc1_ & 0x0F > 0)
-    //       aud_out ^= (1 << 1);
+        if (cnt1_ <= 0) {
+            cnt1_ = audf1_;
+            if ((audc1_ & 0x0F) > 0) aud_out ^= (1 << 0);  // 0xFF;
 
-    //     if (irqen_ & (1 << 0)) {
-    //       irqst_ &= (~(1 << 0));
-    //       mos65c02_irq_on();
-    //     }
-    //   }
-    // if (cnt2_ <= 0) {
-    //   cnt2_ = audf2_;
-    //   if (audc2_ & 0x0F > 0)
-    //     aud_out ^= (1 << 2);
+            if (irqen_ & (1 << 0)) {
+                irqst_ &= (~(1 << 0));
+                mos65c02_irq_on();
+            }
+        }
+        if (cnt2_ <= 0) {
+            cnt2_ = audf2_;
+            if ((audc2_ & 0x0F) > 0) aud_out ^= (1 << 1);  // 0xFF;
 
-    //   if (irqen_ & (1 << 1)) {
-    //     irqst_ &= (~(1 << 1));
-    //     mos65c02_irq_on();
-    //   }
-    // }
-    //   // create audio output
-    //   if (aud_out)
-    //     gpio_set_mask(1 << 20);
-    //   else
-    //     gpio_clr_mask(1 << 20);
-    // }
+            if (irqen_ & (1 << 1)) {
+                irqst_ &= (~(1 << 1));
+                mos65c02_irq_on();
+            }
+        }
+    }
+#endif
 
+#if 0
     cnt3_ -= clock_step;
 
     if (cnt3_ <= 0) {
         // reload counter 3
         cnt3_ = audf3_;
-        // if (audc3_ & 0x0F > 0)
-        //   aud_out ^= (1 << 3);
-
+#if OPTION_POKEY_AUDIO
+        if ((audc3_ & 0x0F) > 0) aud1_out ^= (1<<2);    // 0xFF;
+#endif
         // checked for linked mode with tim4
         if (audctl_ & (1 << 3)) {
             cnt4_--;
@@ -387,6 +383,14 @@ void __not_in_flash_func(pokey_tick)() {
             }
         }
     }
+#endif
+#if OPTION_POKEY_AUDIO
+    // create audio output
+    if (aud_out)
+        gpio_set_mask(1 << 20);
+    else
+        gpio_clr_mask(1 << 20);
+#endif
 
     // #endif
 }

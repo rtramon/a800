@@ -235,6 +235,9 @@ int main() {
     hw_set_bits(&bus_ctrl_hw->priority, BUSCTRL_BUS_PRIORITY_PROC1_BITS);
     multicore_launch_core1(core1_main);
 
+#if defined(OPTION_SOUND)
+    init_sound(20);
+#endif
     // play start beep and let usb discover devices (if any)
     // init_sound(20);
     // play_sound(20, 400);
