@@ -327,8 +327,6 @@ void __not_in_flash_func(antic_render_scanline)(uint16_t* scanbuf, int line) {
         // // update scanline with rendered player graphics
         pm_player_scanline(scanbuf);
     }
-    // pokey timer  (once every 114 6502 cycles)
-    // tpokey_tick();
 #endif
 }
 

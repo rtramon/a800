@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Initialise pico_sdk from installed location
@@ -74,7 +74,8 @@ spaceinvaders.cc
 usb_hid.cc
 emu_m6502.cc
 memcpy.cc
-sound.cc
+#sound.cc
+sound_pio.cc
 salt205.cc
 mspacman_rom.cc
 starraiders.cc
@@ -87,6 +88,7 @@ pico_set_program_version(a800v1 "0.1")
 # Generate PIO header
 #pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
 pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/sm0_memory_emulation_with_clock.pio)
+pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/sound_pio.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(a800v1 1)
@@ -104,12 +106,13 @@ target_include_directories(a800v1 PRIVATE
 
 # add compile definitions
 target_compile_definitions(a800v1 PUBLIC
+        #PARAM_ASSERTIONS_ENABLE_ALL=1
         PICO_DEFAULT_UART=0
         PICO_DEFAULT_UART_TX_PIN=28
         PICO_DEFAULT_UART_RX_PIN=29
         PICO_DEFAULT_UART_BAUD_RATE=115200
         #PICO_DEFAULT_UART_BAUD_RATE=921600
-        PICO_STACK_SIZE=0x200
+        PICO_STACK_SIZE=0x300
         PICO_DIVIDER_IN_RAM=1
         DVI_DEFAULT_SERIAL_CONFIG=pico_neo6502_cfg
         #DVI_MONOCHROME_TMDS=1
@@ -122,10 +125,10 @@ target_compile_definitions(a800v1 PUBLIC
         #PAL_COLORS
         NTSC_COLORS
         #EMU_M6502=1
-        #SALT=1
+        #SALT=1 
 
-        #OPTION_SOUND
-        OPTION_POKEY_AUDIO
+        OPTION_SOUND
+        #OPTION_POKEY_AUDIO
 
         OPTION_MODE4_EXPERIMENTAL
         OPTION_MODE6_EXPERIMENTAL

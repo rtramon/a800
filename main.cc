@@ -98,7 +98,7 @@ static inline void __dvi_func_x(my_dvi_prepare_scanline_16bpp)(
 // note: buffer is 16 pixels larger to cope with writing past the end
 // instead of checking (optimization)
 static uint16_t __aligned(4) scanbuf[FRAME_WIDTH + 16];
-__attribute__((section(".scratch_x."))) int lines;
+// int lines;
 
 void mode_2_prepare_tmdsbuf(uint32_t*);
 
@@ -112,10 +112,9 @@ void __dvi_func_x(core1_main)() {
     dvi_start(&dvi0);
 
     uint32_t start = timer_hw->timerawl;
-
     while (true) {
         // display list starts at line 8 and ends no later than scanline 248
-        for (lines = 0; lines < FRAME_HEIGHT; lines++) {
+        for (int lines = 0; lines < FRAME_HEIGHT; lines++) {
             antic_render_scanline(scanbuf, lines);
 
 #if !defined(OPTION_TMDS)
@@ -138,7 +137,7 @@ void __dvi_func_x(core1_main)() {
             // before the next scanline is drawn
             // 240810: delay > 10 causes redlines in pacman
             uint32_t line_ts = timer_hw->timerawl;
-            while (timer_hw->timerawl - line_ts < 10);
+            while (timer_hw->timerawl - line_ts < 8);
         }
 
         // puts("vbi");
@@ -204,23 +203,37 @@ int main() {
 
     set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);
 
-    // board_init();
+    board_init();
 
     stdio_init_all();
+
+    puts("\n\nNEO6502 Memory Emulator v0.02");
+    printf("CPU Freq: %d Mhz\n", DVI_TIMING.bit_clk_khz / 1000);
 
     tuh_init(BOARD_TUH_RHPORT);
 
     // init DMA supported memcopy
     memcpy_dma_init();
 
-    puts("\n\nNEO6502 Memory Emulator v0.02");
-    printf("CPU Freq: %d Mhz\n", DVI_TIMING.bit_clk_khz / 1000);
-
-    // for (int i = 0; i < 150; i++) {
-    //     tuh_task();
-    //     busy_wait_ms(10);
-    // }
-
+    for (int i = 0; i < 150; i++) {
+        tuh_task();
+        busy_wait_ms(10);
+    }
+#if defined(OPTION_SOUND)
+    init_sound(20);
+    play_sound(0, 440);
+    sleep_ms(200);
+    stop_sound(0);
+    play_sound(1, 380);
+    sleep_ms(200);
+    stop_sound(1);
+    play_sound(2, 340);
+    sleep_ms(200);
+    stop_sound(2);
+    play_sound(3, 300);
+    sleep_ms(200);
+    stop_sound(3);
+#endif
     // Reset Atari & 6502 core
     system_init();
 
@@ -235,29 +248,22 @@ int main() {
     hw_set_bits(&bus_ctrl_hw->priority, BUSCTRL_BUS_PRIORITY_PROC1_BITS);
     multicore_launch_core1(core1_main);
 
-#if defined(OPTION_SOUND)
-    init_sound(20);
-#endif
-    // play start beep and let usb discover devices (if any)
-    // init_sound(20);
-    // play_sound(20, 400);
-    // tuh_task();
-    // busy_wait_ms(200);
-    // stop_sound(20);
-
     // removing the following lines affects the correct generation
     // of the dvi output
     // not sure why
-    for (int i = 0; i < 100; i++) {
-        tuh_task();
-        busy_wait_ms(10);
-    }
+    // for (int i = 0; i < 100; i++) {
+    //     tuh_task();
+    //     busy_wait_ms(10);
+    // }
 
     sem_release(&dvi_start_sem);
 
     // puts("Starting 6502");
     while (1) {
+        for (int i = 0; i < 4; i++) stop_sound(i);
         menu();
+        play_sound(0, 400);
+        sleep_ms(100);
         //  play start beep and let usb discover devices (if any)
         // init_sound(20);
         // play_sound(20, 400);

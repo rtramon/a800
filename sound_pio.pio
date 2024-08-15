@@ -1,0 +1,55 @@
+.program sound_pio
+;
+; shift out pokey audio
+; pop 32 bit integer from TX FIFO, use them as delay
+; sm expected to execute at 1024kHz (16 times Pokeys fast audio clock)
+;
+
+start:
+    pull
+.wrap_target
+    mov x, osr
+    jmp !x start
+    irq clear 0 rel
+    set pins, 1
+loop1:
+    jmp x-- loop1
+
+    set pins 0
+    mov x, osr
+loop0:
+    jmp x--, loop0 
+   irq set 0 rel      ; irq 0 plus state machine number
+.wrap
+
+
+;start:
+;    pull 
+;.wrap_target
+;    mov x, osr
+;    jmp !x start
+;    set pins, 1 [16]
+;
+;loop:
+;    set pins, 0 
+;    jmp x-- loop
+;.wrap
+
+% c-sdk {
+void sound_pio_program_init(PIO pio, uint sm, uint offset, uint pin) {
+
+    pio_gpio_init(pio, pin);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    pio_sm_config c = sound_pio_program_get_default_config(offset);
+
+    sm_config_set_set_pins(&c, pin, 1);
+
+    //float div = (float)clock_get_hz(clk_sys) / 1'024'000UL;
+    float div = (float)clock_get_hz(clk_sys) / 1'789'000UL;
+    sm_config_set_clkdiv(&c, div);
+    
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

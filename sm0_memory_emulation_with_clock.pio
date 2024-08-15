@@ -2,7 +2,7 @@
 .side_set 1 opt
 .wrap_target
 start:
-    set pins, 0b110 side 1  [5] ; activate A0-A7, side 1 is clock high
+    set pins, 0b110 side 1  [6] ; activate A0-A7, side 1 is clock high
     in  pins, 8                 ; read 8 bits
     set pins, 0b101         [5] ; activate A8-A15
     in  pins, 24                ; read 8 bits, OEs, r/w bit and some random bits

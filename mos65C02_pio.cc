@@ -40,18 +40,22 @@
 // # of clock cycles to keep reset pin low
 #define RESET_COUNT 100
 
+#define PIO_M65C02 pio0
+#define PIO_SM_M65C02 3
 //
 // GLOBALS
 uint ticks;
-uint pio1_offset = 0;
+uint pio_prog_offset = 0;
 
 void mos65c02_init() {
     ticks = 0;
 
     // addressbus, databus  and rw are controlled by pio
-    pio1_offset = pio_add_program(pio1, &memory_emulation_with_clock_program);
-    memory_emulation_with_clock_program_init(pio1, 0, pio1_offset);
-    pio_sm_set_enabled(pio1, 0, true);
+    pio_prog_offset =
+        pio_add_program(PIO_M65C02, &memory_emulation_with_clock_program);
+    memory_emulation_with_clock_program_init(PIO_M65C02, PIO_SM_M65C02,
+                                             pio_prog_offset);
+    pio_sm_set_enabled(PIO_M65C02, PIO_SM_M65C02, true);
 
     // reset, nmi and irq are controlled by sw
     gpio_init_mask((1ul << GP_RESET) | (1ul << GP_NMIB) | (1ul << GP_IRQB));
@@ -89,12 +93,12 @@ void __m6502_func(mos65c02_tick)() {
     } value;
 
     ticks = ticks + 1;
-    value.value = pio_sm_get_blocking(pio1, 0);
+    value.value = pio_sm_get_blocking(PIO_M65C02, PIO_SM_M65C02);
     // printf("a:%04x\n", value.value & 0x0000FFFF);
     if (value.data.flags & 0x8) {  // 65C02 read
-        pio_sm_put(pio1, 0, mem_read(value.data.address));
+        pio_sm_put(PIO_M65C02, 3, mem_read(value.data.address));
     } else {
-        uint8_t data = pio_sm_get_blocking(pio1, 0);
+        uint8_t data = pio_sm_get_blocking(PIO_M65C02, PIO_SM_M65C02);
         mem_write(value.data.address, data);
     }
 }

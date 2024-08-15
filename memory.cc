@@ -48,6 +48,10 @@ uint16_t cart_start = 0xFFFF;
 uint read_cnt = 0;
 uint write_cnt = 0;
 
+void inline NOP_LOOP(uint x) {
+    while (x--) asm volatile("nop\n");
+}
+
 void mem_reset() { memset(mem, 0, sizeof(mem)); }
 
 uint8_t* __m6502_func(mem_read_ptr)(uint16_t address) {
@@ -78,8 +82,9 @@ uint8_t* __m6502_func(mem_read_ptr)(uint16_t address) {
 uint8_t __m6502_func(mem_read)(uint16_t address) {
     // statistic number of read counter
     // read_cnt++;
+    // printf("MEM R $%04X\n", address);
 
-    if (address < 0x5000) return mem[address];
+    // if (address < 0x5000) return mem[address];
 
     if (address > 0xD7FF) return mem[address];
 
