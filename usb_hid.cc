@@ -396,11 +396,11 @@ process_generic_report(uint8_t dev_addr,
         trig0_ = 0;
         break;
       case 0x20: // START
-        consol_ = 0b00000110;
+        consol_ = 0x06;     // 0b00000110;
         break;
 
       case 0x10: // SELECT
-        consol_ = 0b00000101;
+        consol_ = 0x05;     // 0b00000101;
         break;
     }
 

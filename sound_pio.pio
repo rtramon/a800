@@ -2,7 +2,7 @@
 ;
 ; shift out pokey audio
 ; pop 32 bit integer from TX FIFO, use them as delay
-; sm expected to execute at 1024kHz (16 times Pokeys fast audio clock)
+; sm expected to execute at 1.789MHz 
 ;
 
 start:
@@ -46,7 +46,6 @@ void sound_pio_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
     sm_config_set_set_pins(&c, pin, 1);
 
-    //float div = (float)clock_get_hz(clk_sys) / 1'024'000UL;
     float div = (float)clock_get_hz(clk_sys) / 1'789'000UL;
     sm_config_set_clkdiv(&c, div);
     

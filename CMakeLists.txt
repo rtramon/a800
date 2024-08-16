@@ -127,8 +127,7 @@ target_compile_definitions(a800v1 PUBLIC
         #EMU_M6502=1
         #SALT=1 
 
-        OPTION_SOUND
-        #OPTION_POKEY_AUDIO
+        #OPTION_SOUND_INTERRUPTS
 
         OPTION_MODE4_EXPERIMENTAL
         OPTION_MODE6_EXPERIMENTAL

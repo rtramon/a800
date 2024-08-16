@@ -22,7 +22,9 @@ constexpr float clk_fast = 252'000'000.0 / 1'789'000.0;
 constexpr float clk_64k = 252'000'000.0 / 1'024'000.0;
 
 uint audio_pio_offset;
+bool sound_is_enabled;
 
+#if defined(OPTION_SOUND_INTERRUPTS)
 void on_pio_irq(void) {
     printf("pio irq: %x\n", AUDIO_PIO->irq);
 
@@ -32,6 +34,7 @@ void on_pio_irq(void) {
     if (AUDIO_PIO->irq & 4) AUDIO_PIO->irq = 4;
     if (AUDIO_PIO->irq & 8) AUDIO_PIO->irq = 8;
 }
+#endif
 
 void init_sound(uint8_t chan) {
     chan;
@@ -43,14 +46,22 @@ void init_sound(uint8_t chan) {
         pio_sm_set_enabled(AUDIO_PIO, chan, true);
     }
 
+    enable_sound(true);
+
+#if defined(OPTION_SOUND_INTERRUPTS)
     // setup PIO interrupt
     irq_set_exclusive_handler(AUDIO_PIO_IRQ, on_pio_irq);
     irq_set_enabled(AUDIO_PIO_IRQ, true);
     AUDIO_PIO->inte0 = PIO_IRQ0_INTE_SM0_BITS | PIO_IRQ0_INTE_SM1_BITS |
                        PIO_IRQ0_INTE_SM2_BITS | PIO_IRQ0_INTE_SM3_BITS;
+#endif
 }
+bool sound_enabled() { return sound_is_enabled; };
+extern void enable_sound(bool enable) { sound_is_enabled = enable; };
 
 void __not_in_flash_func(play_sound)(uint8_t chan, uint32_t freq) {
+    if (!sound_is_enabled) return;
+
     if (chan < MAX_AUDIO_CHANNEL) {
         uint top = (PIO_SM_FREQ / freq) / 2;
 
@@ -60,14 +71,17 @@ void __not_in_flash_func(play_sound)(uint8_t chan, uint32_t freq) {
 }
 
 void __not_in_flash_func(stop_sound)(uint8_t chan) {
+    if (!sound_is_enabled) return;
+
     if (chan < MAX_AUDIO_CHANNEL) {
         pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
     }
 }
 
 void __not_in_flash_func(play_pokey_sound)(uint8_t chan, uint8_t pokey_freq) {
-    // translate pokey frequency to audio frequency
+    if (!sound_is_enabled) return;
 
+    // translate pokey frequency to audio frequency
     if (audctl_ & (1 << 3)) {
         if ((chan == AUDIO_CHANNEL4) || (chan == AUDIO_CHANNEL3)) {
             // channel 3 and 4 are combined, only use channel 4
@@ -115,11 +129,13 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan, uint8_t pokey_freq) {
 }
 
 void __not_in_flash_func(set_timer_int)(uint chan, bool enabled) {
+#if defined(OPTION_SOUND_INTERRUPTS)
     pio_set_irqn_source_enabled(AUDIO_PIO, AUDIO_PIO_IRQ,
                                 (pio_interrupt_source_t)(pis_interrupt0 + chan),
                                 enabled);
 
-    // printf("PIO Int %d set to %d\n", pis_interrupt0 + chan, enabled);
+// printf("PIO Int %d set to %d\n", pis_interrupt0 + chan, enabled);
+#endif
 }
 
 void __not_in_flash_func(audctl_update)(uint8_t audctl) {

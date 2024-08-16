@@ -443,8 +443,6 @@ void __not_in_flash_func(execute_dlist)(uint line) {
 void __not_in_flash_func(antic_dl_start)(uint line) {
     // fetch player missile data
     const uint16_t pmbase_addr = (pmbase_ & 0xF8) << 8;
-    // const uint8_t *pm_data = mem_read_ptr(pmbase_addr);
-    // #if 0
 
     if (dmactl_ & (1 << 3)) {
         // Fetch Players bitmap
@@ -452,10 +450,8 @@ void __not_in_flash_func(antic_dl_start)(uint line) {
             grafp_[i] = mem_read(pmbase_addr + line + 8 + 0x400 + 256 * i);
         }
     }
-    // #endif
 
     if (dmactl_ & (1 << 2)) {
-        // grafm_ = *(pm_data + line + 768);
         grafm_ = mem_read(pmbase_addr + line + 8 + 768);
     }
 
@@ -628,58 +624,8 @@ void __not_in_flash_func(mode_2_prepare_scanbuf)(uint16_t* pixbuf) {
     }
 }
 
-#if defined(OPTION_TMDS)
-// antic text mode 2, basic mode 0, 40x24 hires text, 1,5 colors
-void __dvi_func_x(mode_2_prepare_tmdsbuf)(uint32_t* tmdsbuf) {
-    // TMDS data for RGB channel for a double pixel (a perfectly bit balanced
-    // pixel)
-    constexpr int DVI_WORDS_PER_CHANNEL = 320;
-
-    int bk = (reg_colpf[2] & 0xF0) * 3;
-    int col = ((reg_colpf[2] & 0xF0) | (reg_colpf[1] & 0xF)) * 3;
-
-    // dvi_get_scanline(tmdsbuf);
-    // dvi_scanline_rgb(tmdsbuf, tmdsbuf_red, tmdsbuf_green, tmdsbuf_blue);
-    uint32_t* tmdsbuf_blue = tmdsbuf;
-    uint32_t* tmdsbuf_green = tmdsbuf_blue + DVI_WORDS_PER_CHANNEL;
-    uint32_t* tmdsbuf_red = tmdsbuf_green + DVI_WORDS_PER_CHANNEL;
-
-    // // handle small wide playfield
-    // if ((dmactl_ & 0x03) == 1) {
-    //     // handle small playfield
-    //     pixbuf += (40 - 32) * 8 / 2;
-    // }
-
-    const uint8_t* font =
-        mem_read_ptr(((antic_chbase & 0xFE) << 8) + (dl_data.scanline));
-
-    // draw playfield
-    for (int i = 0; i < chars_scanline; ++i) {
-        const uint8_t c = *(screendata_ptr + i);
-
-        uint8_t pixels = *(font + (c & 0x7F) * 8);
-        if ((c & 0x80) && (chactl_ & 0x03)) pixels ^= 0xFF;
-        uint color_index = 0;
-        for (int bit = 7; bit >= 0; bit--) {
-            if (pixels & (1 << bit))
-                color_index = col;
-            else
-                color_index = bk;
-
-            // *(tmdsbuf_blue++) = color2tmds(color_index + 2);
-            // *(tmdsbuf_green++) = color2tmds(color_index + 1);
-            // *(tmdsbuf_red++) = color2tmds(color_index);
-            *(tmdsbuf_blue++) = tmds_palette[color_index + 2];
-            *(tmdsbuf_green++) = tmds_palette[color_index + 1];
-            *(tmdsbuf_red++) = tmds_palette[color_index];
-        }
-    }
-}
-#endif
-
 // mode 4
 // text mode 4; 40x24; 5 color 4x8 character cell
-#if defined(OPTION_MODE4_EXPERIMENTAL)
 void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
     uint16_t pal[4] = {
         colbk_,
@@ -758,70 +704,10 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
     }
 }
 
-#else
-
-void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
-    uint16_t pal[4] = {
-        colbk_,
-        colpf[0],
-        colpf[1],
-        colpf[2],
-    };
-
-    uint16_t* pixbuf = scanbuf;
-    pixbuf += ((40 - CHAR_COLS[dmactl_ & 0x03]) * 8 / 2);
-
-    uint8_t* font =
-        mem_read_ptr((antic_chbase << 8) + (dl_data.scanline / double_y));
-
-    int offset = 0;
-    int scroll_offset = 0;
-    int end = chars_scanline;
-    if (dl_data.hscroll) {
-        // from a800 emulator github antic.c#3956
-        // but for boulderdash '4' is used iso '2'???
-        // default hscrol_ in boulderdash is 3
-        offset = 4 - (hscrol_ / 4);
-        end += offset;
-
-        if (hscrol_ & 0x03) {
-            scroll_offset = (hscrol_ & 0x03) * 2;
-            offset--;
-        }
-    }
-
-    for (int i = offset; i < end; i++) {
-        uint8_t c = *(screendata_ptr + i);
-        uint8_t pixels = *(font + (c & 0x7F) * 8);
-        uint16_t rgbcolor;
-        if (c & 0x80)
-            pal[3] = colpf[3];
-        else
-            pal[3] = colpf[2];
-
-        if (scroll_offset) {
-            // read to character bit and shift the horizontal scoll
-            // use the low 8 bit as the pixel bits
-            uint16_t pix16 = ((uint16_t)pixels << 8) |
-                             *(font + (*(screendata_ptr + i + 1) & 0x7F) * 8);
-
-            pixels = (pix16 >> (scroll_offset));
-        }
-
-        for (int j = 6; j >= 0; j -= 2) {
-            uint8_t color = (pixels >> j) & 0x03;
-            *(pixbuf++) = pal[color];
-            *(pixbuf++) = pal[color];
-        }
-    }
-}
-#endif
-
 //
 // text mode 6, basic mode 1, 8x8 chars , 20x24, 5 colors; each pixel is a color
 // clock text mode 7, basic mode 2, 8x16 chars, 20x12, 5 colors
 //
-#if defined(OPTION_MODE6_EXPERIMENTAL)
 void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
     // printf("dmaclt_: %x, hscroll: %x\n", dmactl_ & 0x03,
     // dl_data.hscroll);
@@ -901,61 +787,6 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
         }
     }
 }
-
-#else
-
-void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
-    // printf("dmaclt_: %x, hscroll: %x\n", dmactl_ & 0x03,
-    // dl_data.hscroll);
-
-    pixbuf += ((40 - CHAR_COLS[dmactl_ & 0x03]) * 8 / 2);
-
-    uint8_t* font = mem_read_ptr(((antic_chbase & 0xFC) << 8) +
-                                 ((dl_data.scanline / double_y)));
-    uint8_t chdata;
-    uint8_t pixels;
-
-    int start = 0;
-    int scroll_offset = 0;
-    int end = chars_scanline;
-    if (dl_data.hscroll) {
-        // from a800 emulator github antic.c#3956
-        // but here i is '2', otherwise spaceinvaders does not look and
-        // align correctly
-        start = 2 - (hscrol_ / 8);
-
-        if (hscrol_) {
-            scroll_offset = hscrol_ & 0x07;
-            if (scroll_offset) start--;
-        }
-        end = start + chars_scanline;
-    }
-
-    for (int i = start; i < end; i++) {
-        uint8_t chdata = *(screendata_ptr + i);
-        uint8_t pixels = *(font + (chdata & 0x3F) * 8);
-
-        if (scroll_offset) {
-            // read to character bit and shift the horizontal scroll
-            // use the low 8 bit as the pixel bits
-            uint16_t pix16 = (pixels << 8) |
-                             *(font + (*(screendata_ptr + i + 1) & 0x3F) * 8);
-
-            pixels = pix16 >> scroll_offset;
-        }
-
-        for (int bit = 7; bit >= 0; bit--) {
-            if (pixels & (1 << bit)) {
-                *(pixbuf++) = colpf[(chdata >> 6)];
-                *(pixbuf++) = colpf[(chdata >> 6)];
-            } else {
-                *(pixbuf++) = colbk_;
-                *(pixbuf++) = colbk_;
-            }
-        }
-    }
-}
-#endif
 
 //
 // Mode 8 Grafic mode , basic mode 3, 4 color 40x24
@@ -1039,12 +870,6 @@ void __not_in_flash_func(mode_E_prepare_scanbuf)(uint16_t* scanbuf) {
         *(pixbuf + 7) = palette[color];
         pixbuf += 8;
     }
-
-    // //  display pm
-    // pm_missile_scanline(scanbuf, line);
-
-    // // update scanline with rendered player graphics
-    // pm_player_scanline(scanbuf, line);
 }
 
 void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
@@ -1077,7 +902,6 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
                 // background color each pixels is 4 screen pixels
                 uint8_t c = scrn[i];
                 uint16_t rgbcolor = color2rgb(reg_colbk_ | (c >> 4));
-                // memset16(pixbuf, rgbcolor, 4);
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
@@ -1114,15 +938,12 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
                 // background color each pixels is 4 screen pixels
                 uint8_t c = scrn[i];
                 uint16_t rgbcolor = palette[c >> 4];
-                // memset16(pixbuf, rgbcolor, 4);
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
 
                 rgbcolor = palette[c & 0x0F];
-                // memset16(pixbuf + 4, rgbcolor, 4);
-                // pixbuf += 8;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
@@ -1136,15 +957,12 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
                 // background color each pixels is 4 screen pixels
                 uint8_t c = scrn[i];
                 uint16_t rgbcolor = color2rgb((c & 0x0F) | reg_colbk_);
-                // memset16(pixbuf, rgbcolor, 4);
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
 
                 rgbcolor = color2rgb((c << 4) | reg_colbk_);
-                // memset16(pixbuf + 4, rgbcolor, 4);
-                // pixbuf += 8;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
@@ -1152,8 +970,6 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
             }
             break;
     }
-    // increment line counter
-    // window_mode_y_++;
 }
 
 void __not_in_flash_func(mode_0_prepare_scanbuf)(uint16_t* scanbuf) {

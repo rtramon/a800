@@ -1,6 +1,7 @@
 #ifndef __SOUND_H_
 #define __SOUND_H_
 
+#include <cstddef>
 #include <cstdint>
 
 #define AUDIO_CHANNEL1 0  // 16
@@ -11,10 +12,14 @@
 extern void init_sound(uint8_t chan);
 extern void play_sound(uint8_t chan, uint32_t freq);
 extern void stop_sound(uint8_t chan);
-
 extern void play_pokey_sound(uint8_t chan, uint8_t pokey_freq);
 
-extern void set_timer_int(uint chan, bool enabled);
+extern bool sound_enabled();
+extern void enable_sound(bool);
+
+#if defined(OPTION_SOUND_INTERRUPTS)
+extern void set_timer_int(unsigned int chan, bool enabled);
+#endif
 extern void audctl_update(uint8_t audctl);
 
 #endif

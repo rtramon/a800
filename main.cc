@@ -219,7 +219,7 @@ int main() {
         tuh_task();
         busy_wait_ms(10);
     }
-#if defined(OPTION_SOUND)
+
     init_sound(20);
     play_sound(0, 440);
     sleep_ms(200);
@@ -233,7 +233,7 @@ int main() {
     play_sound(3, 300);
     sleep_ms(200);
     stop_sound(3);
-#endif
+
     // Reset Atari & 6502 core
     system_init();
 

@@ -69,6 +69,14 @@ enum POKEY_WRITE_REG_t {
     SKCTL = 0xf
 };
 
+//
+// DEBUG MACROS
+//
+#define DUMP_AUDF() \
+    printf("AUDF:$%02X $%02X $%02X $%02X\n", audf1_, audf2_, audf3_, audf4_);
+#define DUMP_AUDC() \
+    printf("AUDF:$%02X $%02X $%02X $%02X\n", audc1_, audc2_, audc3_, audc4_);
+
 // function prototype
 uint8_t ascii_keycode(uint8_t);
 
@@ -111,20 +119,10 @@ void pokey_reset() {
 
     serout_delay = 0;
     serxmt_delay = 0;
-
-#if defined OPTION_POKEY_AUDIO
-    // initialize GPIO20 as audio output
-    gpio_init(20);
-    gpio_set_dir(20, GPIO_OUT);
-    gpio_put(20, 0);
-    // gpio_set_dir_out_masked((1ul << 20));
-    // gpio_clr_mask(1ul << 20);
-#endif
 }
 
 uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
     uint8_t data;
-    // printf("R POKEY : $%02x\n", reg);
 
     switch (reg) {
         case POT0:  // value of paddle
@@ -137,7 +135,6 @@ uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
             break;
 
         case KBCODE:  // value of last pressed key
-            // printf("POKEY read to KBCODE : $%02x\n", kbcode_);
             data = kbcode_;
             break;
 
@@ -150,7 +147,6 @@ uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
             break;
 
         case IRQST:
-            // printf("R POKEY IRQST: $%02x  = IRQEN: $%02x\n", irqst_, irqen_);
             data = irqst_;
             break;
 
@@ -160,9 +156,6 @@ uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
             break;
 
         default:
-            // printf("PANIC! POKEY read not implemented register $%02x\n",
-            // reg);
-
             data = 0xFF;
             break;
     }
@@ -171,112 +164,65 @@ uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
 }
 
 void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
-    // printf("POKEY write $%02x : $%02x\n", reg, data);
     switch (reg) {
         case AUDF1:
             audf1_ = data;
-            // printf("W POKEY AUDF1 %02X\n", data);
-            // printf("AUDF:$%02X $%02X $%02X $%02X\n", audf1_, audf2_, audf3_,
-            //    audf4_);
-
-#if defined(OPTION_SOUND)
             if (audc1_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL1, data);
-#endif
             break;
 
         case AUDC1:
-            // printf("W POKEY AUDC1 %02X\n", data);
             audc1_ = data;
-#if defined(OPTION_SOUND)
             if ((data & 0x0F) != 0)
                 play_pokey_sound(AUDIO_CHANNEL1, audf1_);
             else
                 stop_sound(AUDIO_CHANNEL1);
-#endif
-            // printf("AUDC:$%02X $%02X $%02X $%02X\n", audc1_, audc2_, audc3_,
-            //        audc4_);
-
             break;
 
         case AUDF2:
             audf2_ = data;
-            // printf("W POKEY AUDF2 %02X\n", data);
-            // printf("AUDF:$%02X $%02X $%02X $%02X\n", audf1_, audf2_, audf3_,
-            //    audf4_);
-
-#if defined(OPTION_SOUND)
             if (audc2_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL2, data);
-#endif
-
             break;
+
         case AUDC2:
             // printf("W POKEY AUDC2 %02X\n", data);
 
             audc2_ = data;
-#if defined(OPTION_SOUND)
             if ((data & 0x0F) != 0)
                 play_pokey_sound(AUDIO_CHANNEL2, audf2_);
             else
                 stop_sound(AUDIO_CHANNEL2);
-#endif
-            // printf("AUDC:$%02X $%02X $%02X $%02X\n", audc1_, audc2_, audc3_,
-            //    audc4_);
 
             break;
 
         case AUDF3:
             audf3_ = data;
-#if defined(OPTION_SOUND)
             if (audc3_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL3, data);
-#endif
-            // printf("AUDF:$%02X $%02X $%02X $%02X\n", audf1_, audf2_, audf3_,
-            //    audf4_);
             break;
 
         case AUDC3:
-            // if (data & 0x0F) printf("W POKEY AUDC3 %02X\n", data);
             audc3_ = data;
-#if defined(OPTION_SOUND)
             if ((data & 0x0F) != 0)
                 play_pokey_sound(AUDIO_CHANNEL3, audf3_);
             else
                 stop_sound(AUDIO_CHANNEL3);
 
-#endif
-            // printf("AUDC:$%02X $%02X $%02X $%02X\n", audc1_, audc2_,
-            // audc3_,
-            //    audc4_);
-
             break;
 
         case AUDF4:
             audf4_ = data;
-#if defined(OPTION_SOUND)
             if (audc4_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL4, data);
-#endif
-            // printf("AUDF:$%02X $%02X $%02X $%02X\n", audf1_, audf2_, audf3_,
-            //        audf4_);
-
             break;
+
         case AUDC4:
-            // if (data & 0x0F) printf("W POKEY AUDC4 %02X\n", data);
             audc4_ = data;
-#if defined(OPTION_SOUND)
             if ((data & 0x0F) != 0)
                 play_pokey_sound(AUDIO_CHANNEL4, audf4_);
             else
                 stop_sound(AUDIO_CHANNEL4);
-#endif
-            // printf("AUDC:$%02X $%02X $%02X $%02X\n", audc1_, audc2_, audc3_,
-            //        audc4_);
             break;
 
         case AUDCTL:
-            // if (data != audctl_) {
             audctl_ = data;
-            // audctl_update(data);
-            // printf("POKEY AUDCTL: $%02x\n", audctl_);
-            // }
             break;
 
         case SKRES:  // resets bits 5,6,7 of SKSTAT to 1
@@ -316,7 +262,9 @@ void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
 
         case IRQEN:  // interupt status
             irqen_ = data;
-            printf("W IRQEN: $%02x  IRQST $%02x\n", irqen_, irqst_);
+            // printf("W IRQEN: $%02x  IRQST $%02x\n", irqen_, irqst_);
+
+#if defined OPTION_SOUND_INTERRUPTS
             if (data & 0x01) {
                 // printf("\tIRQ T1\n");
                 set_timer_int(AUDIO_CHANNEL1, true);
@@ -335,9 +283,8 @@ void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
             } else {
                 set_timer_int(AUDIO_CHANNEL4, false);
             }
-
+#endif
             irqst_ |= (~irqen_ & 0xF7);
-            // printf("  after IRQST $%02x\n", irqst_);
             handle_irq();
             break;
 

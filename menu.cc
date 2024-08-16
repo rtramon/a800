@@ -1,6 +1,8 @@
 #include "menu.h"
 
+#include "gtia.h"
 #include "memory.h"
+#include "sound.h"
 #include "tusb.h"
 #include "tusb_config.h"
 
@@ -10,14 +12,15 @@ char *roms[MAXROMS] = {"BASIC",          "Miner 2049",   "PACMAN",
                        "Pengo",          "MS Pacman",    "Star Raiders"};
 char hello[] = "NEO6502 ATARI 8BIT";
 char games[] = "games";
-char press[] = "press fire to continue";
+char press[] = "press start/fire to continue";
 
 // function prototypes
 void init_display();
 void print_banner();
+void print_sound_option();
 void print(uint16_t, char *);
 
-int rom;
+int rom = 0;
 
 uint8_t atascii_to_iv(uint8_t c) {
     // strip off top bit
@@ -35,14 +38,24 @@ void menu() {
 
     init_display();
     print_banner();
+    print_sound_option();
 
-    rom = 0;
     print(0x4000 + 10 + rom * 40, "*");
 
     // while (peek(0xD010)) {
-    while (trig0_) {
-        tuh_task();
-        sleep_ms(20);
+    // wait for fire button of start pressed
+    // while ((trig0_) || (consol_ != CONSOL_START)) {
+    bool done = false;
+    while (!done) {
+        // check input to end loop
+        if (consol_ == CONSOL_START) done = true;
+
+        if (!trig0_) done = true;
+
+        if (consol_ == CONSOL_SELECT) {
+            enable_sound(!sound_enabled());
+            print_sound_option();
+        }
 
         if (regPORTA != 0xFF) {
             print(0x4000 + 10 + rom * 40, " ");
@@ -60,18 +73,13 @@ void menu() {
                     rom = 0;
 
             print(0x4000 + 10 + rom * 40, "*");
-
-            // slow down a bit
-            for (auto i = 0; i < 6; i++) {
-                tuh_task();
-                sleep_ms(20);
-            }
         }
-    }
-    // slow down a bit
-    for (auto i = 0; i < 6; i++) {
-        tuh_task();
-        sleep_ms(20);
+
+        // slow down a bit
+        for (auto i = 0; i < 6; i++) {
+            tuh_task();
+            sleep_ms(20);
+        }
     }
 }
 
@@ -123,6 +131,16 @@ void print_banner() {
     for (int i = 0; i < MAXROMS; i++) print(0x4000 + 12 + i * 40, roms[i]);
 
     print(0x4000 + 16 * 40 + (40 - strlen(press)) / 2, press);
+}
+
+void print_sound_option() {
+    char *snd_off = "press option to disable sound";
+    char *snd_on = "press option to enable sound";
+
+    if (sound_enabled())
+        print(0x4000 + 15 * 40 + (40 - strlen(snd_off)) / 2, snd_off);
+    else
+        print(0x4000 + 15 * 40 + (40 - strlen(snd_on)) / 2, snd_on);
 }
 
 void print(uint16_t addr, char *str) {
