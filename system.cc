@@ -35,7 +35,7 @@ void system_init() {
     load_rom(0);
 
 #if defined(EMU_M6502)
-    puts("EMU 6502 Core");
+    puts("EMU 6502 Init");
     m6502_init(&cpu);
     cpu.read_byte = mem_read;
     cpu.write_byte = mem_write;
@@ -57,10 +57,8 @@ void __m6502_func(system_reset)() {
     load_rom(rom);
 
 #if defined(EMU_M6502)
-    puts("EMU 6502 Core");
-    m6502_init(&cpu);
-    cpu.read_byte = mem_read;
-    cpu.write_byte = mem_write;
+    puts("EMU 6502 Reset");
+    m6502_gen_res(&cpu);
 #else
     mos65c02_reset();
 #endif
@@ -78,3 +76,20 @@ void __m6502_func(system_run)() {
     }
     GLreset = false;
 }
+#if 0
+void __m6502_func(system_run)() {
+    while (!GLreset) {
+        uint32_t start = timer_hw->timerawl;
+        for (uint i = 0; i < 100; i++) {
+            pokey_tick();
+#ifdef EMU_M6502
+            m6502_step(&cpu);
+#else
+            mos65c02_tick();
+#endif
+        }
+        while (timer_hw->timerawl - start < 100'000 / 1789);
+    }
+    GLreset = false;
+}
+#endif

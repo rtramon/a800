@@ -12,7 +12,7 @@
 extern void init_sound(uint8_t chan);
 extern void play_sound(uint8_t chan, uint32_t freq);
 extern void stop_sound(uint8_t chan);
-extern void play_pokey_sound(uint8_t chan, uint8_t pokey_freq);
+extern void play_pokey_sound(uint8_t chan);
 
 extern bool sound_enabled();
 extern void enable_sound(bool);

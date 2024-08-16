@@ -5,8 +5,8 @@
 // uncomment to enable sound (sort of) generation
 // #define OPTION_AUDIO
 
-extern uint8_t audf1_, audf2_, audf3_, audf4_;
-extern uint8_t audc1_, audc2_, audc3_, audc4_;
+extern uint8_t audf[4];
+extern uint8_t audc[4];
 extern uint8_t audctl_;
 
 void pokey_reset();

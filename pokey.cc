@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include <cstdlib>
+#include <cstring>
 
 #include "gtia.h"
 #include "hardware/timer.h"
@@ -29,8 +30,8 @@ volatile uint8_t irqen_;
 volatile uint8_t irqst_;
 volatile uint8_t kbcode_;
 uint8_t random_;
-uint8_t audf1_, audf2_, audf3_, audf4_;
-uint8_t audc1_, audc2_, audc3_, audc4_;
+uint8_t audf[4];
+uint8_t audc[4];
 uint8_t audctl_;
 int cnt1_, cnt2_, cnt3_, cnt4_;
 uint8_t aud_out;
@@ -111,8 +112,8 @@ void pokey_reset() {
     random_ = 0;
 
     audctl_ = 0;
-    audc1_ = audc2_ = audc3_ = audc4_ = 0;
-
+    // audc1_ = audc2_ = audc3_ = audc4_ = 0;
+    memset(audc, 0, 4);
     // invisible registers
     cnt1_ = cnt2_ = cnt3_ = cnt4_ = 0xFF;
     aud_out = 0;
@@ -166,62 +167,50 @@ uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
 void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
     switch (reg) {
         case AUDF1:
-            audf1_ = data;
-            if (audc1_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL1, data);
+            audf[0] = data;
+            play_pokey_sound(AUDIO_CHANNEL1);
             break;
 
         case AUDC1:
-            audc1_ = data;
-            if ((data & 0x0F) != 0)
-                play_pokey_sound(AUDIO_CHANNEL1, audf1_);
-            else
-                stop_sound(AUDIO_CHANNEL1);
+            audc[0] = data;
+            play_pokey_sound(AUDIO_CHANNEL1);
             break;
 
         case AUDF2:
-            audf2_ = data;
-            if (audc2_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL2, data);
+            audf[1] = data;
+            play_pokey_sound(AUDIO_CHANNEL2);
             break;
 
         case AUDC2:
-            // printf("W POKEY AUDC2 %02X\n", data);
-
-            audc2_ = data;
-            if ((data & 0x0F) != 0)
-                play_pokey_sound(AUDIO_CHANNEL2, audf2_);
-            else
-                stop_sound(AUDIO_CHANNEL2);
-
+            // if (data != audc[1]) printf("audc2 $%02X\n", data);
+            audc[1] = data;
+            play_pokey_sound(AUDIO_CHANNEL2);
             break;
 
         case AUDF3:
-            audf3_ = data;
-            if (audc3_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL3, data);
+            audf[2] = data;
+            play_pokey_sound(AUDIO_CHANNEL3);
             break;
 
         case AUDC3:
-            audc3_ = data;
-            if ((data & 0x0F) != 0)
-                play_pokey_sound(AUDIO_CHANNEL3, audf3_);
-            else
-                stop_sound(AUDIO_CHANNEL3);
-
+            // if (data != audc[2]) printf("audc3 $%02X\n", data);
+            audc[2] = data;
+            play_pokey_sound(AUDIO_CHANNEL3);
             break;
 
         case AUDF4:
-            audf4_ = data;
-            if (audc4_ & 0x0f) play_pokey_sound(AUDIO_CHANNEL4, data);
+            audf[3] = data;
+            play_pokey_sound(AUDIO_CHANNEL4);
             break;
 
         case AUDC4:
-            audc4_ = data;
-            if ((data & 0x0F) != 0)
-                play_pokey_sound(AUDIO_CHANNEL4, audf4_);
-            else
-                stop_sound(AUDIO_CHANNEL4);
+            // if (data != audc[3]) printf("audc4 $%02X\n", data);
+            audc[3] = data;
+            play_pokey_sound(AUDIO_CHANNEL4);
             break;
 
         case AUDCTL:
+            if (data != audctl_) printf("audctl $%02X\n", data);
             audctl_ = data;
             break;
 
@@ -253,10 +242,10 @@ void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
 
         case STIMER:
             // set counter registers to their audf*_ value;
-            cnt1_ = audf1_;
-            cnt2_ = audf2_;
-            cnt3_ = audf3_;
-            cnt4_ = audf4_;
+            cnt1_ = audf[0];
+            cnt2_ = audf[1];
+            cnt3_ = audf[2];
+            cnt4_ = audf[3];
             // printf("POKEY Write to STIMER : $%02x\n", data);
             break;
 

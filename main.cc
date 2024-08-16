@@ -264,14 +264,7 @@ int main() {
         menu();
         play_sound(0, 400);
         sleep_ms(100);
-        //  play start beep and let usb discover devices (if any)
-        // init_sound(20);
-        // play_sound(20, 400);
-        // for (int i = 0; i < 20; i++) {
-        //     tuh_task();
-        //     busy_wait_ms(10);
-        // }
-        // stop_sound(20);
+        play_sound(0, 0);
 
         // ensure core1 check usb host task
         check_tuh = true;

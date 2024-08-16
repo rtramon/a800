@@ -1,25 +1,34 @@
 .program sound_pio
 ;
 ; shift out pokey audio
-; pop 32 bit integer from TX FIFO, use them as delay
+; pop 32 bit integer from TX FIFO, use them as high delay
+; pop 32 bit from osr for low period delay
 ; sm expected to execute at 1.789MHz 
 ;
 
 start:
     pull
+    mov y, osr
+
+    ; get low period and store in isr
+    pull
+
+
 .wrap_target
-    mov x, osr
+    mov x, y
     jmp !x start
-    irq clear 0 rel
+
+    ;irq clear 0 rel
     set pins, 1
 loop1:
     jmp x-- loop1
 
     set pins 0
+
     mov x, osr
 loop0:
     jmp x--, loop0 
-   irq set 0 rel      ; irq 0 plus state machine number
+   ;irq set 0 rel      ; irq 0 plus state machine number
 .wrap
 
 

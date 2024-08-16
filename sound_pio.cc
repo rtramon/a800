@@ -42,7 +42,7 @@ void init_sound(uint8_t chan) {
     audio_pio_offset = pio_add_program(AUDIO_PIO, &sound_pio_program);
     for (chan = 0; chan < MAX_AUDIO_CHANNEL; chan++) {
         sound_pio_program_init(AUDIO_PIO, chan, audio_pio_offset, AUDIO_GPIO);
-        pio_sm_set_clkdiv(AUDIO_PIO, chan, clk_64k);
+        // pio_sm_set_clkdiv(AUDIO_PIO, chan, clk_64k);
         pio_sm_set_enabled(AUDIO_PIO, chan, true);
     }
 
@@ -66,6 +66,9 @@ void __not_in_flash_func(play_sound)(uint8_t chan, uint32_t freq) {
         uint top = (PIO_SM_FREQ / freq) / 2;
 
         pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
+        // push high period
+        pio_sm_put_blocking(AUDIO_PIO, chan, top);
+        // push low period
         pio_sm_put_blocking(AUDIO_PIO, chan, top);
     }
 }
@@ -78,24 +81,34 @@ void __not_in_flash_func(stop_sound)(uint8_t chan) {
     }
 }
 
-void __not_in_flash_func(play_pokey_sound)(uint8_t chan, uint8_t pokey_freq) {
+void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
     if (!sound_is_enabled) return;
+
+    static uint prev_top[4];
 
     // translate pokey frequency to audio frequency
     if (audctl_ & (1 << 3)) {
         if ((chan == AUDIO_CHANNEL4) || (chan == AUDIO_CHANNEL3)) {
             // channel 3 and 4 are combined, only use channel 4
             // calculate 16 bit delay
-            uint cnt = audf3_ + (audf4_) * 256;
+            uint top = 0;
+            if (audc[3] & 0x0F) top = (audf[2] + audf[3] * 256) / 2;
 
-            pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL3,
-                        pio_encode_jmp(audio_pio_offset));
-            pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL3, 0);
+            if (top != prev_top[3]) {
+                prev_top[3] = top;
+                // push high period
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL3, 0);
+                // push low period
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL3, 0);
+                pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL3,
+                            pio_encode_jmp(audio_pio_offset));
 
-            pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL4,
-                        pio_encode_jmp(audio_pio_offset));
-            pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL4, cnt / 2);
-
+                // push high period
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL4, top);
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL4, top);
+                pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL4,
+                            pio_encode_jmp(audio_pio_offset));
+            }
             return;
         }
     }
@@ -103,29 +116,39 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan, uint8_t pokey_freq) {
     if (audctl_ & (1 << 4)) {
         if ((chan == AUDIO_CHANNEL1) || (chan == AUDIO_CHANNEL2)) {
             // calculate 16 bit delay
-            uint cnt = audf1_ + (audf2_) * 256;
+            uint top = 0;
+            if (audc[1] & 0x0F) top = (audf[0] + audf[1] * 256) / 2;
 
-            // setup pio sm
-            pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL1,
-                        pio_encode_jmp(audio_pio_offset));
-            pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL1, 0);
+            if (top != prev_top[1]) {
+                prev_top[1] = top;
 
-            pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL2,
-                        pio_encode_jmp(audio_pio_offset));
-            pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL2, cnt / 2);
+                // setup pio sm
+                pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL1,
+                            pio_encode_jmp(audio_pio_offset));
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL1, 0);
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL1, 0);
 
+                pio_sm_exec(AUDIO_PIO, AUDIO_CHANNEL2,
+                            pio_encode_jmp(audio_pio_offset));
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL2, top);
+                pio_sm_put_blocking(AUDIO_PIO, AUDIO_CHANNEL2, top);
+            }
             return;
         }
     }
 
-    if (pokey_freq) {
-        uint cnt = (pokey_freq + 1) * 28;
+    // if (pokey_freq) {
+    uint top = 0;
+    // printf("audio chan:%d audf:%d audc:%d\n", chan, audf[chan], audc[chan]);
+
+    if (audc[chan] & 0x0F) top = ((audf[chan]) * 28) / 2;
+    // printf("audio chan:%d top:%d\n", chan, top);
+    if (prev_top[chan] != top) {
+        prev_top[chan] = top;
+        pio_sm_put_blocking(AUDIO_PIO, chan, top);
+        pio_sm_put_blocking(AUDIO_PIO, chan, top);
         pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
-        pio_sm_put_blocking(AUDIO_PIO, chan, cnt);
-        // play_sound(chan, 64000 / (pokey_freq + 1));
-        // play_sound(chan, pokey_freq);
-    } else
-        stop_sound(chan);
+    }
 }
 
 void __not_in_flash_func(set_timer_int)(uint chan, bool enabled) {
