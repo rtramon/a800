@@ -112,7 +112,6 @@ void pokey_reset() {
     random_ = 0;
 
     audctl_ = 0;
-    // audc1_ = audc2_ = audc3_ = audc4_ = 0;
     memset(audc, 0, 4);
     // invisible registers
     cnt1_ = cnt2_ = cnt3_ = cnt4_ = 0xFF;

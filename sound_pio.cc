@@ -42,7 +42,6 @@ void init_sound(uint8_t chan) {
     audio_pio_offset = pio_add_program(AUDIO_PIO, &sound_pio_program);
     for (chan = 0; chan < MAX_AUDIO_CHANNEL; chan++) {
         sound_pio_program_init(AUDIO_PIO, chan, audio_pio_offset, AUDIO_GPIO);
-        // pio_sm_set_clkdiv(AUDIO_PIO, chan, clk_64k);
         pio_sm_set_enabled(AUDIO_PIO, chan, true);
     }
 
