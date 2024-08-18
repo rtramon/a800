@@ -117,27 +117,15 @@ void __dvi_func_x(core1_main)() {
         for (int lines = 0; lines < FRAME_HEIGHT; lines++) {
             antic_render_scanline(scanbuf, lines);
 
-#if !defined(OPTION_TMDS)
             my_dvi_prepare_scanline_16bpp(&dvi0, (uint32_t*)&scanbuf);
-#endif
-#if defined(OPTION_TMDS)
-            uint32_t* tmdsbuf;
-            constexpr uint pixwidth = 640;
-            constexpr uint words_per_channel = pixwidth / DVI_SYMBOLS_PER_WORD;
-            queue_remove_blocking_u32(&dvi0.q_tmds_free, &tmdsbuf);
 
-            // uint32_t line_ts = timer_hw->timerawl;
-            mode_2_prepare_tmdsbuf(tmdsbuf);
-            // printf("l: %d t: %d\n", lines, timer_hw->timerawl - line_ts);
-
-            queue_add_blocking_u32(&dvi0.q_tmds_valid, &tmdsbuf);
-#endif
             antic_dl_end(lines);
             // ensure some time for 6502 DLI routine to execute
             // before the next scanline is drawn
             // 240810: delay > 10 causes redlines in pacman
+            // 240818: delay < 6 causes graphic artifact space invaders
             uint32_t line_ts = timer_hw->timerawl;
-            while (timer_hw->timerawl - line_ts < 8);
+            while (timer_hw->timerawl - line_ts < 6);
         }
 
         // puts("vbi");
@@ -192,7 +180,7 @@ void __dvi_func_x(core1_main)() {
         }
 
         // ensure minimum vblank period
-        while (timer_hw->timerawl - vbi_ts < 200);
+        while (timer_hw->timerawl - vbi_ts < 64);
         // printf("vbi: %d\n", timer_hw->timerawl - vbi_ts);
     }
 }
@@ -224,15 +212,9 @@ int main() {
     play_sound(0, 440);
     sleep_ms(200);
     stop_sound(0);
-    play_sound(1, 380);
+    play_sound(1, 400);
     sleep_ms(200);
     stop_sound(1);
-    play_sound(2, 340);
-    sleep_ms(200);
-    stop_sound(2);
-    play_sound(3, 300);
-    sleep_ms(200);
-    stop_sound(3);
 
     // Reset Atari & 6502 core
     system_init();

@@ -7,18 +7,18 @@
 #include "tusb_config.h"
 
 #define MAXROMS 9
-char *roms[MAXROMS] = {"BASIC",          "Miner 2049",   "PACMAN",
-                       "SPACE INVADERS", "Boulder Dash", "Donkey Kong",
-                       "Pengo",          "MS Pacman",    "Star Raiders"};
-char hello[] = "NEO6502 ATARI 8BIT";
-char games[] = "games";
-char press[] = "press start/fire to continue";
+const char *roms[MAXROMS] = {"BASIC",          "Miner 2049",   "PACMAN",
+                             "SPACE INVADERS", "Boulder Dash", "Donkey Kong",
+                             "Pengo",          "MS Pacman",    "Star Raiders"};
+const char hello[] = "NEO6502 ATARI 8BIT";
+const char games[] = "games";
+const char press[] = "press start/fire to continue";
 
 // function prototypes
 void init_display();
 void print_banner();
 void print_sound_option();
-void print(uint16_t, char *);
+void print(uint16_t, const char *);
 
 int rom = 0;
 
@@ -81,6 +81,9 @@ void menu() {
             sleep_ms(20);
         }
     }
+
+    // for test force mspacman
+    // rom = 7;
 }
 
 void init_display() {
@@ -134,8 +137,8 @@ void print_banner() {
 }
 
 void print_sound_option() {
-    char *snd_off = "press option to disable sound";
-    char *snd_on = "press option to enable sound";
+    const char *snd_off = "press option to disable sound";
+    const char *snd_on = "press option to enable sound";
 
     if (sound_enabled())
         print(0x4000 + 15 * 40 + (40 - strlen(snd_off)) / 2, snd_off);
@@ -143,7 +146,7 @@ void print_sound_option() {
         print(0x4000 + 15 * 40 + (40 - strlen(snd_on)) / 2, snd_on);
 }
 
-void print(uint16_t addr, char *str) {
+void print(uint16_t addr, const char *str) {
     while (*str) {
         poke(addr++, atascii_to_iv(*(str++)));
     }

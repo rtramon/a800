@@ -250,8 +250,7 @@ void __not_in_flash_func(antic_write)(uint8_t reg, uint8_t data) {
             antic_chbase = data;
             // printf("%d W chbase %d\n", timer_hw->timerawl - timestamp_32,
             // lines);
-            // printf("W ANTIC CHBASE $%02x ($%04x) %d\n", data, (data << 8),
-            //    lines);
+            // printf("W ANTIC CHBASE $%02x ($%04x)\n", data, (data << 8));
             break;
 
         case NMIEN:
@@ -346,7 +345,9 @@ void __not_in_flash_func(execute_dlist)(uint line) {
 
     // increment pointer to screen data , note possibly reset when new lms
     // is done
-    screendata_ptr += bytes_scanline;
+    // screendata_ptr += bytes_scanline;
+    antic_screen_base += bytes_scanline;
+    screendata_ptr = mem_read_ptr(antic_screen_base);
 
     // antic_screen_base = antic_screen_base + bytes_scanline;
 
@@ -375,12 +376,6 @@ void __not_in_flash_func(execute_dlist)(uint line) {
     dl_data.hscroll = instr & (1 << 4);
     dl_data.prev_vscroll = dl_data.vscroll;
     dl_data.vscroll = instr & (1 << 5);
-
-    // static uint8_t last_mode = 0;
-    // if (dl_data.mode != last_mode) {
-    //     printf(" DL mode %02x %1x %3d\n", dl_data.mode, dl_data.lms, lines);
-    //     last_mode = dl_data.mode;
-    // }
 
     //
     switch (dl_data.mode) {
@@ -428,6 +423,8 @@ void __not_in_flash_func(execute_dlist)(uint line) {
         antic_screen_base =
             mem_read(dl_counter + 1) + (mem_read(dl_counter + 2) << 8);
         screendata_ptr = mem_read_ptr(antic_screen_base);
+
+        // printf("sb: $%04X  mode:%d\n", antic_screen_base, dl_data.mode);
         dl_counter += 2;
     }
     dl_counter++;
@@ -438,6 +435,17 @@ void __not_in_flash_func(execute_dlist)(uint line) {
     } else if ((dl_data.prev_vscroll == 1) && (dl_data.vscroll == 0)) {
         dl_data.lastline = vscrol_;
     }
+
+    static uint8_t last_mode = 0;
+
+    // if (dl_data.mode != last_mode) {
+    //     printf(" DL mode %02x %1x %3d %2d\n", dl_data.mode, dl_data.lms,
+    //     line,
+    //            bytes_scanline);
+    //     printf("sb: $%04X\n", antic_screen_base);
+
+    //     last_mode = dl_data.mode;
+    // }
 }
 
 void __not_in_flash_func(antic_dl_start)(uint line) {
@@ -601,8 +609,10 @@ void __not_in_flash_func(mode_2_prepare_scanbuf)(uint16_t* pixbuf) {
         pixbuf += (40 - 32) * 8 / 2;
     }
 
+    // const uint8_t* font =
+    //     mem_read_ptr(((antic_chbase & 0xFE) << 8) + (dl_data.scanline));
     const uint8_t* font =
-        mem_read_ptr(((antic_chbase & 0xFE) << 8) + (dl_data.scanline));
+        mem_read_ptr(((antic_chbase & 0xFC) << 8) + (dl_data.scanline));
 
     const uint16_t col1 =
         color2rgb((reg_colpf[2] & 0xF0) | (reg_colpf[1] & 0x0F));
@@ -671,6 +681,8 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
         }
     }
 
+    // printf("m4 chbase: $%02x\n", antic_chbase);
+
     // draw middle part of view
     for (int i = start; i < end; i++) {
         chdata = *(screendata_ptr + i);
@@ -706,17 +718,18 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
 
 //
 // text mode 6, basic mode 1, 8x8 chars , 20x24, 5 colors; each pixel is a color
-// clock text mode 7, basic mode 2, 8x16 chars, 20x12, 5 colors
+// text mode 7, basic mode 2, 8x16 chars, 20x12, 5 colors
 //
 void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
-    // printf("dmaclt_: %x, hscroll: %x\n", dmactl_ & 0x03,
-    // dl_data.hscroll);
     uint16_t* scanbuf = pixbuf;
 
     pixbuf += ((40 - CHAR_COLS[dmactl_ & 0x03]) * 8 / 2);
 
-    uint8_t* font = mem_read_ptr(((antic_chbase & 0xFC) << 8) +
+    // uint8_t* font = mem_read_ptr(((antic_chbase & 0xFC) << 8) +
+    //                              ((dl_data.scanline / double_y)));
+    uint8_t* font = mem_read_ptr(((antic_chbase & 0xFE) << 8) +
                                  ((dl_data.scanline / double_y)));
+
     uint8_t chdata;
     uint8_t pixels;
 
@@ -741,7 +754,6 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
                 // experiment, display shifted first character
                 chdata = *(screendata_ptr + start++);
                 pixels = *(font + (chdata & 0x3F) * 8);
-
                 for (int bit = (scroll_offset - 1); bit >= 0; bit--) {
                     if (pixels & (1 << bit)) {
                         *(pixbuf++) = colpf[(chdata >> 6)];
@@ -754,22 +766,29 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
             }
         }
     }
+    // printf("start: %d end:%d\n", start, end);
 
+    // printf("m6 chbase: $%02x\n", antic_chbase);
+    // printf("colpf %x %x %x %x bk: %x\n", colpf[0], colpf[1], colpf[2],
+    // colpf[3],
+    //        colbk_);
     // Draw middle part of view
     for (int i = start; i < end; i++) {
         chdata = *(screendata_ptr + i);
+        // printf("%02X ", chdata);
         pixels = *(font + (chdata & 0x3F) * 8);
-
+        uint8_t color = chdata >> 6;
         for (int bit = 7; bit >= 0; bit--) {
             if (pixels & (1 << bit)) {
-                *(pixbuf++) = colpf[(chdata >> 6)];
-                *(pixbuf++) = colpf[(chdata >> 6)];
+                *(pixbuf++) = colpf[color];
+                *(pixbuf++) = colpf[color];
             } else {
                 *(pixbuf++) = colbk_;
                 *(pixbuf++) = colbk_;
             }
         }
     }
+    // printf("\n");
 
     // draw scrolled last character
     if (scroll_offset) {
