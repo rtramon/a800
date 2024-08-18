@@ -209,7 +209,7 @@ int main() {
         busy_wait_ms(10);
     }
 
-    init_sound(20);
+    init_sound();
     play_sound(0, 440);
     sleep_ms(200);
     stop_sound(0);

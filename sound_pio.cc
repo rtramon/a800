@@ -36,11 +36,9 @@ void on_pio_irq(void) {
 }
 #endif
 
-void init_sound(uint8_t chan) {
-    chan;
-
+void init_sound() {
     audio_pio_offset = pio_add_program(AUDIO_PIO, &sound_pio_program);
-    for (chan = 0; chan < MAX_AUDIO_CHANNEL; chan++) {
+    for (uint chan = 0; chan < MAX_AUDIO_CHANNEL; chan++) {
         sound_pio_program_init(AUDIO_PIO, chan, audio_pio_offset, AUDIO_GPIO);
         pio_sm_set_enabled(AUDIO_PIO, chan, true);
     }
