@@ -180,7 +180,8 @@ void __dvi_func_x(core1_main)() {
         }
 
         // ensure minimum vblank period
-        while (timer_hw->timerawl - vbi_ts < 64);
+        // 200 seems ok, too short means PF and PM do not line up correctly
+        while (timer_hw->timerawl - vbi_ts < 200);
         // printf("vbi: %d\n", timer_hw->timerawl - vbi_ts);
     }
 }
