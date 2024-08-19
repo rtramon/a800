@@ -74,8 +74,8 @@ void (*render_scanline)(uint16_t*, uint16_t);
 // functions
 //
 
-static inline void __dvi_func_x(my_dvi_prepare_scanline_16bpp)(
-    struct dvi_inst* inst, uint32_t* scanbuf) {
+static __always_inline void my_dvi_prepare_scanline_16bpp(struct dvi_inst* inst,
+                                                          uint32_t* scanbuf) {
     uint32_t* tmdsbuf;
     constexpr uint pixwidth = 640;
     constexpr uint words_per_channel = pixwidth / DVI_SYMBOLS_PER_WORD;
@@ -115,11 +115,15 @@ void __dvi_func_x(core1_main)() {
     while (true) {
         // display list starts at line 8 and ends no later than scanline 248
         for (int lines = 0; lines < FRAME_HEIGHT; lines++) {
+            system_set_runticks(104);
+
             antic_render_scanline(scanbuf, lines);
 
             my_dvi_prepare_scanline_16bpp(&dvi0, (uint32_t*)&scanbuf);
 
             antic_dl_end(lines);
+            system_set_runticks(10);
+
             // ensure some time for 6502 DLI routine to execute
             // before the next scanline is drawn
             // 240810: delay > 10 causes redlines in pacman
@@ -135,6 +139,7 @@ void __dvi_func_x(core1_main)() {
         antic_dl_end(240);
 
         antic_gen_vbi();
+        system_set_runticks(22 * 114);
 
         // tinyusb host task
         if (check_tuh) tuh_task();

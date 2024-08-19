@@ -56,10 +56,10 @@ void init_sound() {
 bool sound_enabled() { return sound_is_enabled; };
 extern void enable_sound(bool enable) { sound_is_enabled = enable; };
 
-static void inline set_sound_output(uint8_t chan, uint32_t value) {
-    pio_sm_put_blocking(AUDIO_PIO, chan, value);
-    pio_sm_put_blocking(AUDIO_PIO, chan, value);
+static void __always_inline set_sound_output(uint8_t chan, uint32_t value) {
     pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
+    pio_sm_put_blocking(AUDIO_PIO, chan, value);
+    pio_sm_put_blocking(AUDIO_PIO, chan, value);
 }
 
 void __not_in_flash_func(play_sound)(uint8_t chan, uint32_t freq) {

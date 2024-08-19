@@ -22,8 +22,12 @@ bool GLreset = false;
 M6502 cpu;
 #endif
 
+uint runticks;
+
 // external declarations
 void load_rom(int);
+
+void system_set_runticks(uint t) { runticks = t; }
 
 void system_init() {
     antic_reset();
@@ -34,6 +38,8 @@ void system_init() {
     mem_reset();
     load_rom(0);
 
+    // init 6502
+    runticks = 100;  // allow some startup ticks
 #if defined(EMU_M6502)
     puts("EMU 6502 Init");
     m6502_init(&cpu);
@@ -68,11 +74,15 @@ void __m6502_func(system_reset)() {
 void __m6502_func(system_run)() {
     while (!GLreset) {
         pokey_tick();
+
+        if (runticks > 0) {
+            runticks--;
 #ifdef EMU_M6502
-        m6502_step(&cpu);
+            m6502_step(&cpu);
 #else
-        mos65c02_tick();
+            mos65c02_tick();
 #endif
+        }
     }
     GLreset = false;
 }

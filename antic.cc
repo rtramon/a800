@@ -681,8 +681,6 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
         }
     }
 
-    // printf("m4 chbase: $%02x\n", antic_chbase);
-
     // draw middle part of view
     for (int i = start; i < end; i++) {
         chdata = *(screendata_ptr + i);
@@ -725,8 +723,6 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
 
     pixbuf += ((40 - CHAR_COLS[dmactl_ & 0x03]) * 8 / 2);
 
-    // uint8_t* font = mem_read_ptr(((antic_chbase & 0xFC) << 8) +
-    //                              ((dl_data.scanline / double_y)));
     uint8_t* font = mem_read_ptr(((antic_chbase & 0xFE) << 8) +
                                  ((dl_data.scanline / double_y)));
 
@@ -751,7 +747,6 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
             if (scroll_offset) {
                 start--;
                 end--;
-                // experiment, display shifted first character
                 chdata = *(screendata_ptr + start++);
                 pixels = *(font + (chdata & 0x3F) * 8);
                 for (int bit = (scroll_offset - 1); bit >= 0; bit--) {
@@ -766,16 +761,10 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
             }
         }
     }
-    // printf("start: %d end:%d\n", start, end);
 
-    // printf("m6 chbase: $%02x\n", antic_chbase);
-    // printf("colpf %x %x %x %x bk: %x\n", colpf[0], colpf[1], colpf[2],
-    // colpf[3],
-    //        colbk_);
     // Draw middle part of view
     for (int i = start; i < end; i++) {
         chdata = *(screendata_ptr + i);
-        // printf("%02X ", chdata);
         pixels = *(font + (chdata & 0x3F) * 8);
         uint8_t color = chdata >> 6;
         for (int bit = 7; bit >= 0; bit--) {
@@ -788,7 +777,6 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
             }
         }
     }
-    // printf("\n");
 
     // draw scrolled last character
     if (scroll_offset) {

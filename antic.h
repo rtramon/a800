@@ -1,6 +1,7 @@
 #ifndef _ANTIC_H__
 #define _ANTIC_H__
 #include <stdint.h>
+#include <sys/cdefs.h>
 
 extern uint8_t GLtrace;
 extern volatile uint8_t antic_chbase;
@@ -19,7 +20,7 @@ void antic_dl_start(unsigned int);
 void antic_dl_end(unsigned int);
 
 // support functions
-inline uint8_t atascii_to_iv(uint8_t c) {
+uint8_t __always_inline atascii_to_iv(uint8_t c) {
     // strip off top bit
     // c &= 0x7F;
     if (c <= 31) return (c + 64) * 8;
@@ -27,7 +28,7 @@ inline uint8_t atascii_to_iv(uint8_t c) {
     return c * 8;
 }
 
-inline uint8_t iv_to_ascii(uint8_t iv) {
+uint8_t __always_inline iv_to_ascii(uint8_t iv) {
     if (iv <= 63) return iv + 32;
     if (iv <= 95) return iv - 64;
 
