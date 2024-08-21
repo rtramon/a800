@@ -89,6 +89,7 @@ pico_set_program_version(a800v1 "0.1")
 #pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
 pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/sm0_memory_emulation_with_clock.pio)
 pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/sound_pio.pio)
+#pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/sound_pwn_pio.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(a800v1 1)

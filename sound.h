@@ -10,7 +10,9 @@
 #define AUDIO_CHANNEL4 3
 
 extern void init_sound();
-extern void play_sound(uint8_t chan, uint32_t freq);
+extern void play_sound(uint8_t chan, uint32_t freq, uint8_t vol = 15);
+// extern void play_sound(uint8_t chan, uint32_t freq, uint32_t volume);
+extern void play_sound_p(uint8_t chan, uint32_t h_period, uint32_t l_period);
 extern void stop_sound(uint8_t chan);
 extern void play_pokey_sound(uint8_t chan);
 

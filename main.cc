@@ -215,12 +215,18 @@ int main() {
     }
 
     init_sound();
-    play_sound(0, 440);
-    sleep_ms(200);
-    stop_sound(0);
-    play_sound(1, 400);
-    sleep_ms(200);
-    stop_sound(1);
+    // puts("pwm audio");
+    // sleep_ms(500);
+    // for (uint vol = 0; vol < 16; vol++) {
+    //     // play_sound(0, vol, 9090 - vol);
+    //     for (uint i = 0; i < 998; i++) {
+    //         play_sound_p(0, vol * 3, 100 - vol * 3);
+    //         sleep_ms(1);
+    //         stop_sound(0);
+    //         sleep_ms(1);
+    //         // printf("vol: %d\n", vol);
+    //     }
+    // }
 
     // Reset Atari & 6502 core
     system_init();

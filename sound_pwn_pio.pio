@@ -1,0 +1,59 @@
+.program sound_pio
+;
+; shift out pokey audio
+; pop 32 bit integer from TX FIFO, use them as high delay
+; pop 32 bit from osr for low period delay
+; sm expected to execute at 4 Mhz
+; sm parameters:
+;  cycles pwm_high   isr
+;  audio half period osr
+
+start:
+    ; get pwm high period and store in isr
+    pull
+    mov isr, osr
+
+    ; get audio period and keep is osr
+    pull 
+
+.wrap_target
+    mov y, osr
+
+audio_high:    
+    mov x, isr
+    set pins, 1
+
+pwm_high:
+    jmp x-- pwm_high
+
+pwm_low:
+    set pins 0  [31]
+
+    jmp y-- audio_high
+
+    ; now load y with stored value for the audio period
+    mov y, osr
+audio_low:
+    jmp y-- audio_low
+.wrap
+
+
+% c-sdk {
+void sound_pio_program_init(PIO pio, uint sm, uint offset, uint pin) {
+
+    pio_gpio_init(pio, pin);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    pio_sm_config c = sound_pio_program_get_default_config(offset);
+
+    sm_config_set_set_pins(&c, pin, 1);
+
+    //float div = (float)clock_get_hz(clk_sys) / (1'789'000UL);
+    float div = (float)clock_get_hz(clk_sys) / (2'000'000UL);
+
+    sm_config_set_clkdiv(&c, div);
+    
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

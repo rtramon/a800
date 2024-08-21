@@ -5,6 +5,7 @@
 ; pop 32 bit from osr for low period delay
 ; sm expected to execute at 1.789MHz 
 ;
+.side_set 1 opt
 
 start:
     pull
@@ -19,15 +20,15 @@ start:
     jmp !x start
 
     ;irq clear 0 rel
-    set pins, 1
+    ;set pins, 1
 loop1:
-    jmp x-- loop1
+    jmp x-- loop1 side 1
 
-    set pins 0
+    ;set pins 0
 
     mov x, osr
 loop0:
-    jmp x--, loop0 
+    jmp x--, loop0 side 0
    ;irq set 0 rel      ; irq 0 plus state machine number
 .wrap
 
@@ -53,9 +54,12 @@ void sound_pio_program_init(PIO pio, uint sm, uint offset, uint pin) {
 
     pio_sm_config c = sound_pio_program_get_default_config(offset);
 
-    sm_config_set_set_pins(&c, pin, 1);
+    //sm_config_set_set_pins(&c, pin, 1);
+    sm_config_set_sideset_pins(&c, pin);
 
-    float div = (float)clock_get_hz(clk_sys) / 1'789'000UL;
+    float div = (float)clock_get_hz(clk_sys) / (1'789'000UL);
+    //float div = (float)clock_get_hz(clk_sys) / (3578000UL);
+
     sm_config_set_clkdiv(&c, div);
     
     pio_sm_init(pio, sm, offset, &c);
