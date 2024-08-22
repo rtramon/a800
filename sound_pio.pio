@@ -4,46 +4,35 @@
 ; pop 32 bit integer from TX FIFO, use them as high delay
 ; pop 32 bit from osr for low period delay
 ; sm expected to execute at 1.789MHz 
-;
+; parameters: 
+;   high period saved in y
+;   low period saved in osr
+
+.pio_version 0
 .side_set 1 opt
+
+; experiment one 32 bits parameter: low 16 bit low period, high 16 bit high period
 
 start:
     pull
-    mov y, osr
-
-    ; get low period and store in isr
-    pull
-
-
-.wrap_target
-    mov x, y
+    mov x, osr
     jmp !x start
 
-    ;irq clear 0 rel
-    ;set pins, 1
-loop1:
-    jmp x-- loop1 side 1
+.wrap_target
+update:
+    pull noblock    side 0  ; takes X in case fifo is empty
+    mov x, osr              ; copy most recent pulles value back to X
+    jmp!x update     
 
-    ;set pins 0
-
-    mov x, osr
+    out y, 16
 loop0:
-    jmp x--, loop0 side 0
-   ;irq set 0 rel      ; irq 0 plus state machine number
+    jmp y-- loop0   side 0
+
+    out y, 16 
+loop1:
+    jmp y--, loop1  side 1
 .wrap
 
-
-;start:
-;    pull 
-;.wrap_target
-;    mov x, osr
-;    jmp !x start
-;    set pins, 1 [16]
-;
-;loop:
-;    set pins, 0 
-;    jmp x-- loop
-;.wrap
 
 % c-sdk {
 void sound_pio_program_init(PIO pio, uint sm, uint offset, uint pin) {

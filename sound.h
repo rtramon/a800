@@ -9,6 +9,8 @@
 #define AUDIO_CHANNEL3 2  // 20
 #define AUDIO_CHANNEL4 3
 
+#define PIO_SM_FREQ 1'789'000UL
+
 extern void init_sound();
 extern void play_sound(uint8_t chan, uint32_t freq, uint8_t vol = 15);
 // extern void play_sound(uint8_t chan, uint32_t freq, uint32_t volume);
@@ -24,4 +26,5 @@ extern void set_timer_int(unsigned int chan, bool enabled);
 #endif
 extern void audctl_update(uint8_t audctl);
 
+constexpr uint32_t freq_to_period(int freq) { return PIO_SM_FREQ / freq; }
 #endif

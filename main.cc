@@ -216,16 +216,12 @@ int main() {
 
     init_sound();
     // puts("pwm audio");
-    // sleep_ms(500);
-    // for (uint vol = 0; vol < 16; vol++) {
-    //     // play_sound(0, vol, 9090 - vol);
-    //     for (uint i = 0; i < 998; i++) {
-    //         play_sound_p(0, vol * 3, 100 - vol * 3);
-    //         sleep_ms(1);
-    //         stop_sound(0);
-    //         sleep_ms(1);
-    //         // printf("vol: %d\n", vol);
-    //     }
+    // sleep_ms(100);
+    // uint period = freq_to_period(440);
+    // for (uint i = 0; i < 2000; i++) {
+    //     play_sound_p(0, i, period - i);
+    //     sleep_ms(33);
+    //     printf("vol: %d\n", i);
     // }
 
     // Reset Atari & 6502 core
@@ -258,7 +254,7 @@ int main() {
         menu();
         play_sound(0, 400);
         sleep_ms(100);
-        play_sound(0, 0);
+        stop_sound(0);
 
         // ensure core1 check usb host task
         check_tuh = true;

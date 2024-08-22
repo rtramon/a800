@@ -188,6 +188,7 @@ void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
 
         case AUDF3:
             audf[2] = data;
+            // printf("audf3: $%02X\n", data);
             play_pokey_sound(AUDIO_CHANNEL3);
             break;
 

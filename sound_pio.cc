@@ -11,10 +11,6 @@
 // pokey slow audio clock is 15khz
 // pokey fast audio clock is 64khz
 // pokey cpu clock 1.789Mhz
-#define PIO_SM_FREQ 1'789'000UL
-// #define PIO_SM_FREQ (4000000UL)
-// 2x 1.789Mhz (CPU clock)
-// #define PIO_SM_FREQ (3578000UL)
 
 #define AUDIO_PWM_STEPS (400)
 
@@ -46,6 +42,8 @@ void init_sound() {
     for (uint chan = 0; chan < MAX_AUDIO_CHANNEL; chan++) {
         sound_pio_program_init(AUDIO_PIO, chan, audio_pio_offset, AUDIO_GPIO);
         pio_sm_set_enabled(AUDIO_PIO, chan, true);
+        // set audio output off
+        pio_sm_put(AUDIO_PIO, chan, 0);
     }
 
     enable_sound(true);
@@ -63,39 +61,52 @@ extern void enable_sound(bool enable) { sound_is_enabled = enable; };
 
 uint vol_table[16] = {0,   100, 130, 160, 190, 220, 250, 280,
                       310, 350, 380, 410, 440, 470, 500, 530};
+// uint vol_table[16] = {0,   25,  36,  47,  58,  69,  80,  91,
+//                       102, 113, 124, 135, 147, 158, 169, 180};
+// uint abs_table[16] = {0,   50,  93,  137, 181, 225, 268, 312,
+//                       356, 400, 443, 487, 531, 575, 618, 662};
+
 static void __always_inline set_sound_output(uint8_t chan, uint32_t value,
                                              uint vol) {
-    // increase top: 4x because of higher PIO FREQ ; 2x because of old code
-    // division by 2 so that top is the max value
-    value *= 4;
+    if (value > 0x0FFFF) {
+        printf("%d\n", value);
+        panic("input exceeded");
+    }
 
-    // divide value in pwm halfs based on volume (0< volume <15)
-    // with max pwm % at 50% (random choice)
-    uint32_t high_period = (value * (vol_table[vol])) / 1024;
+    if ((value == 0) || (vol == 0)) {
+        pio_sm_put(AUDIO_PIO, chan, 0);
+        return;
+    }
 
-    pio_sm_put(AUDIO_PIO, chan, high_period);
-    pio_sm_put(AUDIO_PIO, chan, value - (high_period));
-    pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
+    // uint16_t high_period = abs_table[vol];
+    uint16_t high_period = (vol_table[vol] * value) / 1024;
+    uint16_t low_period = value - high_period;
+    pio_sm_put(AUDIO_PIO, chan, (high_period << 16) | low_period);
+
+    // pio_sm_put(AUDIO_PIO, chan, high_period);
+    // pio_sm_put(AUDIO_PIO, chan, low_period);
+    // pio_sm_put(AUDIO_PIO, chan, low_period);
+    // pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
 }
 
 void __not_in_flash_func(play_sound)(uint8_t chan, uint32_t freq, uint8_t vol) {
     if (!sound_is_enabled) return;
 
     if (chan < MAX_AUDIO_CHANNEL) {
-        uint top = (PIO_SM_FREQ / freq) / 2;
+        uint top = (PIO_SM_FREQ / freq);
 
         set_sound_output(chan, top, vol);
     }
 }
 
-void __not_in_flash_func(play_sound_p)(uint8_t chan, uint32_t h_period,
-                                       uint32_t l_period) {
+void __not_in_flash_func(play_sound_p)(uint8_t chan, uint16_t h_period,
+                                       uint16_t l_period) {
     if (!sound_is_enabled) return;
 
     if (chan < MAX_AUDIO_CHANNEL) {
-        pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
-        pio_sm_put_blocking(AUDIO_PIO, chan, h_period);
-        pio_sm_put_blocking(AUDIO_PIO, chan, l_period);
+        // pio_sm_put_blocking(AUDIO_PIO, chan, (h_period << 16) | l_period);
+        // pio_sm_put_blocking(AUDIO_PIO, chan, l_period);
+        // pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
     }
 }
 
@@ -103,15 +114,110 @@ void __not_in_flash_func(stop_sound)(uint8_t chan) {
     if (!sound_is_enabled) return;
 
     if (chan < MAX_AUDIO_CHANNEL) {
-        pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
+        // pio_sm_put(AUDIO_PIO, chan, 0);
+        pio_sm_put(AUDIO_PIO, chan, 0);
+        // pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
     }
 }
 
 void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
     if (!sound_is_enabled) return;
 
-    static uint prev_top[4];
+    // printf("chan %d f:$%02X c:$%02X\n", chan, audf[chan], audc[chan]);
+    if (audctl_ & (1 << 4)) {
+        if (chan == AUDIO_CHANNEL2) {
+            // channel 1 and channel 2 combined
+            // calculate 16 bit delay, if channel 2 volume is enabled
+            // if (audc[AUDIO_CHANNEL2] & 0x0F) {
+            uint top;
+            if (audctl_ & (1 << 6))
+                // channel 1.79 Mhz clock
+                top = (7 + audf[0] + audf[1] * 256);
+            else
+                // regular audio clock
+                top = (4 + audf[0] + audf[1] * 256) * 28;
 
+            // setup pio sm
+            set_sound_output(AUDIO_CHANNEL2, top, audc[AUDIO_CHANNEL2] & 0x0F);
+            // } else {
+            //     stop_sound(AUDIO_CHANNEL2);
+            // }
+            return;
+        }
+        if (chan = AUDIO_CHANNEL1) {
+            // if (audc[AUDIO_CHANNEL1] & 0x0F) {
+            uint top;
+            if (audctl_ & (1 << 6))
+                // channel 1.79 Mhz clock
+                top = (audf[0]);
+            else
+                // regular audio clock
+                top = (audf[0]) * 28;
+
+            set_sound_output(AUDIO_CHANNEL1, top, audc[AUDIO_CHANNEL1] & 0x0F);
+            // } else {
+            //     stop_sound(AUDIO_CHANNEL1);
+            // }
+            return;
+        }
+    }
+    if (audctl_ & (1 << 3)) {
+        if (chan == AUDIO_CHANNEL4) {
+            // channel 3 and channel 4 are combined
+
+            // calculate 16 bit delay, if channel 4 volume is enabled
+            // if (audc[AUDIO_CHANNEL4] & 0x0F) {
+            uint top;
+            if (audctl_ & (1 << 5))
+                // channel 3 fast clock  1.79 Mhz clock
+                top = (7 + audf[2] + audf[3] * 256);
+            else
+                // regular audio clock
+                top = (4 + audf[2] + audf[3] * 256) * 28;
+
+            // setup pio sm
+            set_sound_output(AUDIO_CHANNEL4, top, audc[AUDIO_CHANNEL4] & 0x0F);
+            // } else {
+            //     stop_sound(AUDIO_CHANNEL4);
+            // }
+            return;
+        }
+
+        if (chan == AUDIO_CHANNEL3) {
+            // if (audc[AUDIO_CHANNEL3] & 0x0F) {
+            uint top;
+            if (audctl_ & (1 << 5))
+                // channel 1.79 Mhz clock
+                top = (audf[AUDIO_CHANNEL3]);
+            else
+                // regular audio clock
+                top = (audf[AUDIO_CHANNEL3]) * 28;
+
+            set_sound_output(AUDIO_CHANNEL3, top, audc[AUDIO_CHANNEL3] & 0x0F);
+            // } else {
+            //     // stop_sound(AUDIO_CHANNEL3);
+            // }
+            return;
+        }
+    }
+
+    // single channel, assumes 64khz clock
+    if ((audc[chan] & 0x0F) || (audf[chan] != 0)) {
+        uint top;
+        if ((audctl_ & (1 << 6)) && (chan == AUDIO_CHANNEL1))
+            top = (1 + audf[chan]);
+        else if ((audctl_ & (1 << 5)) && (chan == AUDIO_CHANNEL3))
+            top = (audf[chan]);
+        else
+            top = (audf[chan]) * 28;
+
+        set_sound_output(chan, top, audc[chan] & 0x0F);
+    } else {
+        stop_sound(chan);
+    }
+
+#if 0
+        
     // translate pokey frequency to audio frequency
     if (audctl_ & (1 << 3)) {
         if ((chan == AUDIO_CHANNEL4) || (chan == AUDIO_CHANNEL3)) {
@@ -121,10 +227,10 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
             if (audc[3] & 0x0F)
                 if (audctl_ & (1 << 5))
                     // channel 1.79 Mhz clock
-                    top = (7 + audf[2] + audf[3] * 256) / 2;
+                    top = (7 + audf[2] + audf[3] * 256);
                 else
                     // regular audio clock
-                    top = (4 + audf[2] + audf[3] * 256) / 2;
+                    top = (4 + audf[2] + audf[3] * 256) * 28;
 
             // if (top != prev_top[3]) {
             prev_top[3] = top;
@@ -142,32 +248,25 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
             if (audc[1] & 0x0F)
                 if (audctl_ & (1 << 6))
                     // channel 1.79 Mhz clock
-                    top = (7 + audf[0] + audf[1] * 256) / 2;
+                    top = (7 + audf[0] + audf[1] * 256);
                 else
                     // regular audio clock
-                    top = (4 + audf[0] + audf[1] * 256) / 2;
-
-            // if (top != prev_top[1]) {
-            prev_top[1] = top;
+                    top = (4 + audf[0] + audf[1] * 256) * 28;
 
             // setup pio sm
             set_sound_output(AUDIO_CHANNEL1, 0, 0);
             set_sound_output(AUDIO_CHANNEL2, top, audc[AUDIO_CHANNEL2] & 0x0F);
-            // }
             return;
         }
     }
 
-    // if (pokey_freq) {
     uint top = 0;
     // printf("audio chan:%d audf:%d audc:%d\n", chan, audf[chan], audc[chan]);
 
-    if (audc[chan] & 0x0F) top = (((1 + audf[chan])) * 28) / 2;
+    if (audc[chan] & 0x0F) top = (((1 + audf[chan])) * 28);
     // printf("audio chan:%d top:%d\n", chan, top);
-    // if (prev_top[chan] != top) {
-    prev_top[chan] = top;
     set_sound_output(chan, top, audc[chan] & 0x0F);
-    // }
+#endif
 }
 
 void __not_in_flash_func(set_timer_int)(uint chan, bool enabled) {

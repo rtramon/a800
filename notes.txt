@@ -1,0 +1,73 @@
+;
+;
+; ORIGINAL
+;
+start:
+    pull    side 0
+    mov y, osr
+    
+    ; get low period and keep in osr
+    pull
+    jmp !y start
+
+.wrap_target
+    mov x, y side 1
+
+    ;irq clear 0 rel
+loop1:
+    jmp x-- loop1 side 1
+
+    mov x, osr  side 0
+loop0:
+    jmp x--, loop0 side 0
+   ;irq set 0 rel      ; irq 0 plus state machine number
+.wrap
+
+
+
+
+; experiment one 32 bits parameter: low 16 bit high period, high 16 bit low period
+.side_set 1 opt
+
+start:
+    pull    side 0
+    mov x, osr
+
+.wrap_target
+loopstart:
+    pull noblock   
+    mov x,osr
+
+    out y, 16
+    jmp !y loopstart
+
+    ;irq clear 0 rel
+loop1:
+    jmp y-- loop1 side 1
+
+    out y, 16  
+loop0:
+    jmp y--, loop0 side 0
+   ;irq set 0 rel      ; irq 0 plus state machine number
+.wrap
+
+
+
+ander variant
+; experiment one 32 bits parameter: low 16 bit high period, high 16 bit low period
+.side_set 1 opt
+
+start:
+    pull
+    mov x, osr
+    
+.wrap_target
+    ;pull noblock
+    out y, 16 side 1
+loop1:
+    jmp y-- loop1 side 1
+
+    out y, 16 side 0
+loop0:
+    jmp y--, loop0 side 0
+.wrap
