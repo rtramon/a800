@@ -128,7 +128,6 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
         if (chan == AUDIO_CHANNEL2) {
             // channel 1 and channel 2 combined
             // calculate 16 bit delay, if channel 2 volume is enabled
-            // if (audc[AUDIO_CHANNEL2] & 0x0F) {
             uint top;
             if (audctl_ & (1 << 6))
                 // channel 1.79 Mhz clock
@@ -139,13 +138,10 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
 
             // setup pio sm
             set_sound_output(AUDIO_CHANNEL2, top, audc[AUDIO_CHANNEL2] & 0x0F);
-            // } else {
-            //     stop_sound(AUDIO_CHANNEL2);
-            // }
+
             return;
         }
         if (chan = AUDIO_CHANNEL1) {
-            // if (audc[AUDIO_CHANNEL1] & 0x0F) {
             uint top;
             if (audctl_ & (1 << 6))
                 // channel 1.79 Mhz clock
@@ -155,9 +151,7 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
                 top = (audf[0]) * 28;
 
             set_sound_output(AUDIO_CHANNEL1, top, audc[AUDIO_CHANNEL1] & 0x0F);
-            // } else {
-            //     stop_sound(AUDIO_CHANNEL1);
-            // }
+
             return;
         }
     }
@@ -166,7 +160,6 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
             // channel 3 and channel 4 are combined
 
             // calculate 16 bit delay, if channel 4 volume is enabled
-            // if (audc[AUDIO_CHANNEL4] & 0x0F) {
             uint top;
             if (audctl_ & (1 << 5))
                 // channel 3 fast clock  1.79 Mhz clock
@@ -177,14 +170,11 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
 
             // setup pio sm
             set_sound_output(AUDIO_CHANNEL4, top, audc[AUDIO_CHANNEL4] & 0x0F);
-            // } else {
-            //     stop_sound(AUDIO_CHANNEL4);
-            // }
+
             return;
         }
 
         if (chan == AUDIO_CHANNEL3) {
-            // if (audc[AUDIO_CHANNEL3] & 0x0F) {
             uint top;
             if (audctl_ & (1 << 5))
                 // channel 1.79 Mhz clock
@@ -194,9 +184,7 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
                 top = (audf[AUDIO_CHANNEL3]) * 28;
 
             set_sound_output(AUDIO_CHANNEL3, top, audc[AUDIO_CHANNEL3] & 0x0F);
-            // } else {
-            //     // stop_sound(AUDIO_CHANNEL3);
-            // }
+
             return;
         }
     }
