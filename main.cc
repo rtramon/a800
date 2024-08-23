@@ -115,7 +115,8 @@ void __dvi_func_x(core1_main)() {
     while (true) {
         // display list starts at line 8 and ends no later than scanline 248
         for (int lines = 0; lines < FRAME_HEIGHT; lines++) {
-            system_set_runticks(104);
+            // system_set_runticks(104);
+            system_set_runticks(90);
 
             antic_render_scanline(scanbuf, lines);
 
@@ -129,7 +130,7 @@ void __dvi_func_x(core1_main)() {
             // 240810: delay > 10 causes redlines in pacman
             // 240818: delay < 6 causes graphic artifact space invaders
             uint32_t line_ts = timer_hw->timerawl;
-            while (timer_hw->timerawl - line_ts < 6);
+            while (timer_hw->timerawl - line_ts < 8);
         }
 
         // puts("vbi");
@@ -139,7 +140,7 @@ void __dvi_func_x(core1_main)() {
         antic_dl_end(240);
 
         antic_gen_vbi();
-        system_set_runticks(22 * 114);
+        system_set_runticks(20 * 114);
 
         // tinyusb host task
         if (check_tuh) tuh_task();

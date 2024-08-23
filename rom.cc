@@ -37,17 +37,16 @@ struct rom_info {
     uint16_t start;
 };
 
-rom_info rom_table[] = {
-    {nullptr, 0},
-    {miner2049_rom, 0x8000},
-    {pacman_rom, 0xA000},
-    {spaceinvaders_rom, 0xA000},
-    {boulderdash_rom, 0x8000},
-    {donkeykong_rom, 0x8000},
-    {pengo_rom, 0x8000},
-    {mspacman_rom, 0x8000},
-    {starraiders_rom, 0xA000},
-};
+rom_info rom_table[] = {{nullptr, 0},
+                        {miner2049_rom, 0x8000},
+                        {pacman_rom, 0xA000},
+                        {spaceinvaders_rom, 0xA000},
+                        {boulderdash_rom, 0x8000},
+                        {donkeykong_rom, 0x8000},
+                        {pengo_rom, 0x8000},
+                        {mspacman_rom, 0x8000},
+                        {starraiders_rom, 0xA000},
+                        {salt205_rom, 0xA000}};
 
 void load_rom(int rom) {
     printf("load_rom(%d)\n", rom);

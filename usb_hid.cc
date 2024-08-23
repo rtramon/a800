@@ -279,8 +279,8 @@ void process_kbd_report(hid_keyboard_report_t const* report) {
 
     if (!is_key_pressed(report)) {
         // reset SKSTAT key pressed status bits
-        skstat_ |= ((1 << 3) | (1 << 2));
-        kbcode_ &= ~((1 << 7) | (1 << 6));
+        skstat_ |= ((1 << SKSTAT::SHIFT) | (1 << SKSTAT::KEY));
+        kbcode_ &= ~((1 << KBCODE::CNTRL_KEY) | (1 << KBCODE::SHIFT_KEY));
     }
 
     for (uint8_t i = 0; i < 6; i++) {
@@ -323,7 +323,7 @@ void process_kbd_report(hid_keyboard_report_t const* report) {
                 } else {
                     // handle regular keyboards presses
                     int kbcode;
-                    skstat_ &= ~(1 << 2);
+                    skstat_ &= ~(1 << SKSTAT::KEY);
 
                     if (is_shift_pressed) {
                         kbcode = shift_conv_table[report->keycode[i]];
@@ -334,7 +334,7 @@ void process_kbd_report(hid_keyboard_report_t const* report) {
 
                     // if atari kbcode is accessed using shift, indicate shift
                     // is pressed
-                    if (kbcode & (1 << 6)) skstat_ &= ~(1 << 3);
+                    if (kbcode & (1 << 6)) skstat_ &= ~(1 << SKSTAT::SHIFT);
 
                     pokey_report_keycode(kbcode);
                 }

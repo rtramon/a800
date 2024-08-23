@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+enum PRIOR {
+    PF_PM_PRIORITY = 0x0F,
+    FIFTH_PLAYER = 4,
+    MULTICOLOR_PLAYER = 5,
+    GTIA_MODE = 0x03,
+};
+
 void gtia_reset();
 uint8_t gtia_read(uint8_t reg);
 void gtia_write(uint8_t reg, uint8_t data);

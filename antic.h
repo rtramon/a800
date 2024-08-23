@@ -3,6 +3,15 @@
 #include <stdint.h>
 #include <sys/cdefs.h>
 
+enum DMACTL {
+    MISSILE_DMA = 2,
+    PLAYER_DMA = 3,
+    PM_VERT_RESOLUTION = 4,
+    DLIST_DMA = 5
+};
+
+enum GRACTL { MISSILE_EN = 0, PLAYER_EN = 1, TRIGGER_LATCH = 2 };
+
 extern uint8_t GLtrace;
 extern volatile uint8_t antic_chbase;
 extern volatile uint8_t nmist_;

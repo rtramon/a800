@@ -6,10 +6,10 @@
 #include "tusb.h"
 #include "tusb_config.h"
 
-#define MAXROMS 9
-const char *roms[MAXROMS] = {"BASIC",          "Miner 2049",   "PACMAN",
-                             "SPACE INVADERS", "Boulder Dash", "Donkey Kong",
-                             "Pengo",          "MS Pacman",    "Star Raiders"};
+#define MAXROMS 10
+const char *roms[MAXROMS] = {
+    "BASIC",       "Miner 2049", "PACMAN",    "SPACE INVADERS", "Boulder Dash",
+    "Donkey Kong", "Pengo",      "MS Pacman", "Star Raiders",   "SALT"};
 const char hello[] = "NEO6502 ATARI 8BIT";
 const char games[] = "games";
 const char press[] = "press start/fire to continue";
@@ -67,7 +67,7 @@ void menu() {
                     rom = MAXROMS - 1;
 
             if (!(regPORTA & (1 << 1)))  // DOWN
-                if (rom < MAXROMS)
+                if (rom < MAXROMS - 1)
                     rom++;
                 else
                     rom = 0;

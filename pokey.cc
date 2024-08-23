@@ -237,7 +237,7 @@ void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
             serxmt_delay = 100;
 
             // disable Serial output transmission completed interrupt
-            irqst_ |= (1 << 3);
+            irqst_ |= (1 << IRQST::SERIAL_TX_COMPLETE);
             break;
 
         case STIMER:
@@ -302,8 +302,8 @@ void __not_in_flash_func(pokey_tick)() {
         if (serout_delay <= 0) {
             // emulated Serial output data needed ready interrupt
 
-            if (irqen_ & (1 << 4)) {
-                irqst_ &= (~(1 << 4));
+            if (irqen_ & (1 << IRQST::SERIAL_OUT_READY)) {
+                irqst_ &= (~(1 << IRQST::SERIAL_OUT_READY));
                 // irqst_ &= 0xEF;
                 // puts("POKEY serial output data ready");
 
@@ -318,9 +318,9 @@ void __not_in_flash_func(pokey_tick)() {
     if (serxmt_delay > 0) {
         serxmt_delay -= clock_step;
         if (serxmt_delay <= 0) {
-            irqst_ &= (~(1 << 3));
+            irqst_ &= (~(1 << IRQST::SERIAL_TX_COMPLETE));
             // puts("POKEY serial transmit done");
-            if (irqen_ & (1 << 3))
+            if (irqen_ & (1 << IRQST::SERIAL_TX_COMPLETE))
 #ifdef EMU_M6502
                 cpu.irq = true;
 #else
@@ -328,89 +328,11 @@ void __not_in_flash_func(pokey_tick)() {
 #endif
         }
     }
-
-    // return;
-
-#if defined(OPTION_POKEY_AUDIO)
-    // timers
-    // timers count down to zero
-    // timers (audio channels) 1, 2 and 4 can generate an IRQ
-    // IRQST D0 timer1, D1 timer2, D2 timer 4
-    // implement setting $28:
-    // chan 1 64 KHz
-    // chan3 fast clock 1.79 MHz
-    // chan 3 + 4 linked mode
-
-    // slow clock frequency select audctl bit 0 ; not supported
-    // for now only the slow 64kHZ audio clock is emulated
-    static uint clock_tick = 0;
-    if ((clock_tick++ % 23) == 0) {
-        cnt1_ -= clock_step;
-        cnt2_ -= clock_step;
-
-        if (cnt1_ <= 0) {
-            cnt1_ = audf1_;
-            if ((audc1_ & 0x0F) > 0) aud_out ^= (1 << 0);  // 0xFF;
-
-            if (irqen_ & (1 << 0)) {
-                irqst_ &= (~(1 << 0));
-                mos65c02_irq_on();
-            }
-        }
-        if (cnt2_ <= 0) {
-            cnt2_ = audf2_;
-            if ((audc2_ & 0x0F) > 0) aud_out ^= (1 << 1);  // 0xFF;
-
-            if (irqen_ & (1 << 1)) {
-                irqst_ &= (~(1 << 1));
-                mos65c02_irq_on();
-            }
-        }
-    }
-#endif
-
-#if 0
-    cnt3_ -= clock_step;
-
-    if (cnt3_ <= 0) {
-        // reload counter 3
-        cnt3_ = audf3_;
-#if OPTION_POKEY_AUDIO
-        if ((audc3_ & 0x0F) > 0) aud1_out ^= (1<<2);    // 0xFF;
-#endif
-        // checked for linked mode with tim4
-        if (audctl_ & (1 << 3)) {
-            cnt4_--;
-
-            if (cnt4_ <= 0) {
-                // linked timer 3/4 zero, generate irq if enabled
-                // and reload counters
-                if (irqen_ & (1 << 2)) {
-                    irqst_ &= (~(1 << 2));  // timer 4 expired
-                    // printf("TIM4 IRQST $%02x\n", irqst_);
-                    mos65c02_irq_on();
-                }
-
-                // reload counter 4
-                cnt4_ = audf4_;
-            }
-        }
-    }
-#endif
-#if OPTION_POKEY_AUDIO
-    // create audio output
-    // if (aud_out)
-    //     gpio_set_mask(1 << 20);
-    // else
-    //     gpio_clr_mask(1 << 20);
-#endif
-
-    // #endif
 }
 
 void pokey_report_break() {
-    if (irqen_ & (1 << 7)) {
-        irqst_ &= (~(1 << 7));
+    if (irqen_ & (1 << IRQST::BREAK)) {
+        irqst_ &= (~(1 << IRQST::BREAK));
         // printf("BRKKEY IRQST $%02x\n", irqst_ & (1 << 7));
 
 #ifdef EMU_M6502
@@ -424,11 +346,12 @@ void pokey_report_break() {
 void pokey_report_keycode(uint8_t code) {
     // printf("pokey_report_keycode: $%x\n", code);
     kbcode_ = code;
-    if (irqen_ & (1 << 6)) {
-        irqst_ &= (~(1 << 6));  // other key pressed
-                                // printf("IRQST $%02x\n", irqst_ & (1 << 6));
+    if (irqen_ & (1 << IRQST::KEYBD)) {
+        irqst_ &= (~(
+            1 << IRQST::KEYBD));  // other key pressed
+                                  // printf("IRQST $%02x\n", irqst_ & (1 << 6));
 
-        // skstat_ &= (~(1 << 2)); // used for software auto repeat
+        // skstat_ &= (~(1 << SKSTAT::KEY)); // used for software auto repeat
 #ifdef EMU_M6502
         cpu.irq = 1;
 #else
@@ -501,9 +424,9 @@ void pokey_keyb_event(uint8_t code) {
     }
 
     kbcode_ = ascii_keycode(code);
-    if (irqen_ & (1 << 6)) {
-        irqst_ &= (~(1 << 6));  // other key pressed
-                                // printf("IRQST $%02x\n", irqst_);
+    if (irqen_ & (1 << IRQST::KEYBD)) {
+        irqst_ &= (~(1 << IRQST::KEYBD));  // other key pressed
+                                           // printf("IRQST $%02x\n", irqst_);
 
         // skstat_ &= (~(1 << 2)); // used for software auto repeat
 #ifdef EMU_M6502
@@ -656,49 +579,49 @@ uint8_t __not_in_flash_func(ascii_keycode)(uint8_t a) {
             kbcode = 0x07;
             break;
         case '"':
-            kbcode = 0x1E | (1 << 6);
+            kbcode = 0x1E | (1 << KBCODE::SHIFT_KEY);
             shift = true;
             break;
         case '(':
-            kbcode = 0x30 | (1 << 6);
+            kbcode = 0x30 | (1 << KBCODE::SHIFT_KEY);
             break;
         case ')':
-            kbcode = 0x32 | (1 << 6);
+            kbcode = 0x32 | (1 << KBCODE::SHIFT_KEY);
             break;
         case '#':
-            kbcode = 0x1A | (1 << 6);
+            kbcode = 0x1A | (1 << KBCODE::SHIFT_KEY);
             break;
         case '!':
-            kbcode = 1 | (1 << 6);
+            kbcode = 1 | (1 << KBCODE::SHIFT_KEY);
             break;
 
         case '/':
             kbcode = 0x26;
             break;
         case '?':
-            kbcode = 0x26 | (1 << 6);
+            kbcode = 0x26 | (1 << KBCODE::SHIFT_KEY);
             break;
         case ';':
             kbcode = 0x02;
             break;
         case '&':
-            kbcode = 0x1B | (1 << 6);
+            kbcode = 0x1B | (1 << KBCODE::SHIFT_KEY);
             break;
         case '+':
             kbcode = 0x06;
             break;
         case '%':
-            kbcode = 0x1D | (1 << 6);
+            kbcode = 0x1D | (1 << KBCODE::SHIFT_KEY);
             break;
 
         case 0x2D:  // -
             kbcode = 0x0E;
             break;
         case 0x3A:  // :
-            kbcode = 0x02 | (1 << 6);
+            kbcode = 0x02 | (1 << KBCODE::SHIFT_KEY);
             break;
         case 0x24:  // $
-            kbcode = 0x18 | (1 << 6);
+            kbcode = 0x18 | (1 << KBCODE::SHIFT_KEY);
             break;
 
         case 8:  // backspace
@@ -729,11 +652,6 @@ uint8_t __not_in_flash_func(ascii_keycode)(uint8_t a) {
             kbcode = 0x16;
             break;
     }
-
-    // if (shift)
-    //   skstat_ &= (~(1 << 3));
-    // else
-    //   skstat_ |= (1 << 3);
 
     return kbcode;
 }

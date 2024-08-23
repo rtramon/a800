@@ -133,7 +133,7 @@ Mode_data mode_data[16] = {
     {0, 1, 1, false, mode_B_prepare_scanbuf},  // Graphics mode C, Basic mode 14
     {1, 2, 1, false, mode_E_prepare_scanbuf},  // Graphics mode D, Basic mode 7
     {0, 1, 1, false, mode_E_prepare_scanbuf},  // Graphics mode E, Basic mode 15
-    {0, 1, 1, true,
+    {0, 1, 1, false,
      mode_F_prepare_scanbuf},  // Graphics mode F, Basic mode 8,9,10,11
 };
 
@@ -364,7 +364,7 @@ void __not_in_flash_func(execute_dlist)(uint line) {
     if (line > 239) return;
 
     // is displaylist dma on? ref altirra hardware manual
-    if (!(dmactl_ & (1 << 5))) return;
+    if (!(dmactl_ & (1 << DMACTL::DLIST_DMA))) return;
 
     // on the last scanline of the scanline the display list
     // executes an instruction
@@ -452,14 +452,14 @@ void __not_in_flash_func(antic_dl_start)(uint line) {
     // fetch player missile data
     const uint16_t pmbase_addr = (pmbase_ & 0xF8) << 8;
 
-    if (dmactl_ & (1 << 3)) {
+    if (dmactl_ & (1 << DMACTL::PLAYER_DMA)) {
         // Fetch Players bitmap
         for (int i = 3; i >= 0; i--) {
             grafp_[i] = mem_read(pmbase_addr + line + 8 + 0x400 + 256 * i);
         }
     }
 
-    if (dmactl_ & (1 << 2)) {
+    if (dmactl_ & (1 << DMACTL::MISSILE_DMA)) {
         grafm_ = mem_read(pmbase_addr + line + 8 + 768);
     }
 
@@ -501,7 +501,7 @@ void __not_in_flash_func(pm_missile_scanline)(uint16_t* pixbuf) {
 #ifdef PLAYERMISSILE
 
     // Is GTIA Missiles DMA activated
-    if (!(gractl_ & (1 << 0))) return;
+    if (!(gractl_ & (1 << GRACTL::MISSILE_EN))) return;
 
     const uint8_t graf = grafm_;
     if (graf != 0) {
@@ -549,10 +549,10 @@ void __not_in_flash_func(pm_missile_scanline)(uint16_t* pixbuf) {
 
 void __not_in_flash_func(pm_player_scanline)(uint16_t* pixbuf) {
     // is GTIA Player DMA actived
-    if (!(gractl_ & (1 << 1))) return;
+    if (!(gractl_ & (1 << GRACTL::PLAYER_EN))) return;
 
     // Display Players
-    for (int_fast8_t i = 3; i >= 0; i--) {
+    for (int i = 3; i >= 0; i--) {
         if ((hposp_[i] < 0x30) || (hposp_[i] > 0xCF))
             // player position is outside Normal playfield size
             continue;
@@ -565,14 +565,14 @@ void __not_in_flash_func(pm_player_scanline)(uint16_t* pixbuf) {
             uint16_t color = colpm_[i];
 
             // multicolor player?
-            if (prior_ & (1 << 5)) {
+            if (prior_ & (1 << PRIOR::MULTICOLOR_PLAYER)) {
                 if ((i == 0) && (grafp_[1] != 0))
                     color = color2rgb(reg_colpm_[0] | reg_colpm_[1]);
                 if ((i == 2) && (grafp_[3] != 0))
                     color = color2rgb(reg_colpm_[2] | reg_colpm_[3]);
             }
 
-            for (int8_t bit = 7; bit >= 0; bit--) {
+            for (int bit = 7; bit >= 0; bit--) {
                 // for (int size = 0; size < sizep; size++) {
                 if (graf & (1 << bit)) {
                     // perform playfield to player collision detection
@@ -618,7 +618,7 @@ void __not_in_flash_func(mode_2_prepare_scanbuf)(uint16_t* pixbuf) {
         color2rgb((reg_colpf[2] & 0xF0) | (reg_colpf[1] & 0x0F));
 
     // draw playfield
-    for (int i = 0; i < chars_scanline; ++i) {
+    for (uint i = 0; i < chars_scanline; ++i) {
         const uint8_t c = *(screendata_ptr + i);
 
         uint8_t pixels = *(font + (c & 0x7F) * 8);
@@ -652,9 +652,9 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
 
     uint8_t chdata;
     uint8_t pixels;
-    int start = 0;
-    int scroll_offset = 0;
-    int end = chars_scanline;
+    uint start = 0;
+    uint scroll_offset = 0;
+    uint end = chars_scanline;
     if (dl_data.hscroll) {
         start = 4 - (hscrol_ / 4);
         end = chars_scanline + start;
@@ -682,7 +682,7 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
     }
 
     // draw middle part of view
-    for (int i = start; i < end; i++) {
+    for (uint i = start; i < end; i++) {
         chdata = *(screendata_ptr + i);
         pixels = *(font + (chdata & 0x7F) * 8);
         if (chdata & 0x80)
@@ -729,9 +729,9 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
     uint8_t chdata;
     uint8_t pixels;
 
-    int start = 0;
-    int scroll_offset = 0;
-    int end = chars_scanline;
+    uint start = 0;
+    uint scroll_offset = 0;
+    uint end = chars_scanline;
 
     if (dl_data.hscroll) {
         // from a800 emulator github antic.c#3956
@@ -887,7 +887,8 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
     // mode f operates in multiple GTIA modes
     switch (prior_ >> 6) {
         case 0:
-
+            uint16_t
+                palette[2];  // local stack array is faster then global array?
             palette[0] = colpf[2];
             palette[1] =
                 color2rgb((reg_colpf[2] & 0xF0) | (reg_colpf[1] & 0x0F));
@@ -904,7 +905,7 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
             break;
 
         case 0x01:  // 1 color 16 luma mode
-            for (uint i = 0; i < chars_scanline; ++i) {
+            for (uint8_t i = 0; i < chars_scanline; ++i) {
                 // 2 pixels per byte, 4 bit pixel data is used as luma for
                 // background color each pixels is 4 screen pixels
                 uint8_t c = scrn[i];
@@ -940,7 +941,7 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
             palette[7] = colpf[3];
             // TODO handle background color pixel value 10xx
 
-            for (uint i = 0; i < chars_scanline; ++i) {
+            for (uint8_t i = 0; i < chars_scanline; ++i) {
                 // 2 pixels per byte, 4 bit pixel data is used as luma for
                 // background color each pixels is 4 screen pixels
                 uint8_t c = scrn[i];
@@ -959,7 +960,7 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
             break;
 
         case 0x03:  // 16 color 1 luma mode
-            for (uint i = 0; i < chars_scanline; ++i) {
+            for (uint8_t i = 0; i < chars_scanline; ++i) {
                 // 2 pixels per byte, 4 bit pixel data is used as luma for
                 // background color each pixels is 4 screen pixels
                 uint8_t c = scrn[i];
