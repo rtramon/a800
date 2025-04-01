@@ -1,4 +1,3 @@
-
 #include "m6821.h"
 #include "mos65C02.h"
 #include "pico/stdlib.h"

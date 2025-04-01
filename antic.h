@@ -15,12 +15,16 @@ enum GRACTL { MISSILE_EN = 0, PLAYER_EN = 1, TRIGGER_LATCH = 2 };
 extern uint8_t GLtrace;
 extern volatile uint8_t antic_chbase;
 extern volatile uint8_t nmist_;
+extern volatile uint32_t vcount_;
+
+#define CHBASE_MODE2345_MASK 0xFC
+#define CHBASE_MODE67_MASK 0xFE
 
 void antic_reset();
 uint8_t antic_read(uint8_t reg);
 void antic_write(uint8_t reg, uint8_t data);
 
-void antic_dli();
+void antic_gen_dli();
 void antic_gen_vbi();
 
 void antic_render_scanline(uint16_t* scanbuf, int line);
@@ -44,4 +48,5 @@ uint8_t __always_inline iv_to_ascii(uint8_t iv) {
     return iv;
 }
 
+void __always_inline update_vcount(uint32_t vcount) { vcount_ = vcount; }
 #endif

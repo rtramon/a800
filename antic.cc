@@ -10,14 +10,16 @@
 #else
 #include "mos65C02.h"
 #endif
-
 #include <stdio.h>
-#include <string.h>
+
+#include <cmath>
+#include <cstring>
 
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
 #include "memcpy.h"
 #include "pico/platform.h"
+#include "system.h"
 
 #define __dvi_func_y(f) __scratch_y(__STRING(f)) f
 #define __dvi_func_x(f) __scratch_x(__STRING(f)) f
@@ -29,7 +31,7 @@
 
 // forward declaration
 void antic_set_dlist(uint16_t);
-void pm_missile_scanline(uint16_t* pixbuf);
+void pm_missile_scanline(uint16_t* pixbuf, bool hires);
 void pm_player_scanline(uint16_t* pixbuf);
 
 void mode_0_prepare_scanbuf(uint16_t*);
@@ -42,6 +44,8 @@ void mode_D_prepare_scanbuf(uint16_t*);
 void mode_E_prepare_scanbuf(uint16_t*);
 void mode_F_prepare_scanbuf(uint16_t*);
 void blankline_prepare_scanbuf(uint16_t*);
+
+void execute_dlist(uint line);
 
 enum ANTIC_READ_REG_t {
     REG06 = 0x6,
@@ -69,12 +73,13 @@ volatile uint8_t nmist_ = 0;
 static volatile uint8_t dmactl_;
 static volatile uint8_t chactl_;
 static volatile uint8_t pmbase_;
-static volatile uint32_t vcount_ = 0;
+volatile uint32_t vcount_ = 0;
 static volatile uint8_t dlistl_ = 0;
 static volatile uint8_t dlisth_ = 0;
 static volatile uint8_t vscrol_ = 0;
 static volatile uint8_t hscrol_ = 0;
 static volatile bool wsync_ = false;
+static bool dl_suspend = false;
 
 volatile uint16_t antic_screen_base;
 volatile uint8_t antic_chbase;
@@ -91,9 +96,10 @@ static uint8_t*
 static uint16_t dl_counter;
 
 struct display_list_t {
-    int scanline;
-    int lastline;
+    int current_scanline;
+    int nbr_scanlines;
     uint8_t mode;
+    uint8_t cpu_cycles;
     // uint8_t hscroll_offset;
     // uint8_t vscroll_offset;
     bool dli;
@@ -105,42 +111,48 @@ struct display_list_t {
 } dl_data;
 
 struct Mode_data {
-    int lastline;
+    int scanlines;
     int double_y;
     int col_div;  // scanline width divider
+    int cpu_cycles;
     bool hires;
     void (*render_scanline)(uint16_t*);
 };
 
+// note cpu-cycles is the subsequentyle mode line cpu ref antic_timings.txt
+//
 Mode_data mode_data[16] = {
-    {0, 0, 1, false, mode_0_prepare_scanbuf},     // not a display mode
-    {0, 0, 1, false, blankline_prepare_scanbuf},  // not a display mode
-    {7, 1, 1, true, mode_2_prepare_scanbuf},  // Character ANTIC 2, Basic mode 0
-    {9, 1, 1, true, mode_2_prepare_scanbuf},  // Character ANTIC 3
-    {7, 1, 1, false,
+    {0, 0, 1, 114 - 9, false, mode_0_prepare_scanbuf},     // not a display mode
+    {0, 0, 1, 114 - 9, false, blankline_prepare_scanbuf},  // not a display mode
+    {8, 1, 1, 114 - 53, true,
+     mode_2_prepare_scanbuf},  // Character ANTIC 2, Basic mode 0
+    {10, 1, 1, 114 - 53, true, mode_2_prepare_scanbuf},  // Character ANTIC 3
+    {8, 1, 1, 114 - 53, false,
      mode_4_prepare_scanbuf},  // character mode 4, Basic mode 12
-    {15, 2, 1, false,
+    {16, 2, 1, 114 - 53, false,
      mode_4_prepare_scanbuf},  // character mode 5, Basic mode 13
-    {7, 1, 2, false, mode_6_prepare_scanbuf},  // Character mode 6, Basic mode 1
-    {15, 2, 2, false,
-     mode_6_prepare_scanbuf},                  // Character mode 7, Basic mode 2
-    {7, 1, 4, false, mode_8_prepare_scanbuf},  // graphics mode 8, Basic mode 3
-    {0, 0, 0, false,
+    {8, 1, 2, 114 - 33, false,
+     mode_6_prepare_scanbuf},  // Character mode 6, Basic mode 1
+    {16, 2, 2, 114 - 33, false,
+     mode_6_prepare_scanbuf},  // Character mode 7, Basic mode 2
+    {8, 1, 4, 114 - 27, false,
+     mode_8_prepare_scanbuf},  // graphics mode 8, Basic mode 3
+    {1, 0, 0, 114 - 9, false,
      blankline_prepare_scanbuf},  // not implemented Antic mode 9, Basic mode 4
-    {0, 0, 0, false,
+    {1, 0, 0, 114 - 9, false,
      blankline_prepare_scanbuf},  // not implemented Antic mode A, Basic mode 5
-    {1, 1, 2, false, mode_B_prepare_scanbuf},  // Graphics mode B, Basic 6
-    {0, 1, 1, false, mode_B_prepare_scanbuf},  // Graphics mode C, Basic mode 14
-    {1, 2, 1, false, mode_E_prepare_scanbuf},  // Graphics mode D, Basic mode 7
-    {0, 1, 1, false, mode_E_prepare_scanbuf},  // Graphics mode E, Basic mode 15
-    {0, 1, 1, false,
+    {2, 1, 2, 114 - 36, false,
+     mode_B_prepare_scanbuf},  // Graphics mode B, Basic 6
+    {1, 1, 1, 114 - 36, false,
+     mode_B_prepare_scanbuf},  // Graphics mode C, Basic mode 14
+    {2, 2, 1, 114 - 56, false,
+     mode_E_prepare_scanbuf},  // Graphics mode D, Basic mode 7
+    {1, 1, 1, 114 - 56, false,
+     mode_E_prepare_scanbuf},  // Graphics mode E, Basic mode 15
+    {1, 1, 1, 114 - 56, true,
      mode_F_prepare_scanbuf},  // Graphics mode F, Basic mode 8,9,10,11
 };
 
-uint32_t timestamp_32;
-// uint32_t end_32;
-
-extern uint16_t lines;
 extern void (*render_scanline)(uint16_t*);
 #ifdef EMU_M6502
 extern M6502 cpu;
@@ -149,6 +161,7 @@ extern M6502 cpu;
 void __always_inline antic_set_dlist(uint16_t dlist) { dl_counter = dlist; }
 
 void antic_reset() {
+    nmist_ = 0;
     nmien_ = 0;
     dmactl_ = 0;
     chactl_ = 0;
@@ -168,13 +181,14 @@ void antic_reset() {
     chars_scanline = 0;
     bytes_scanline = 0;
     memset(&dl_data, 0, sizeof(dl_data));
+    dl_data.cpu_cycles = 114;
 }
 
 uint8_t __not_in_flash_func(antic_read)(uint8_t reg) {
     uint8_t data;
     switch (reg) {
         case VCOUNT:
-            // printf("ANTIC read VCOUNT $%02x\n", vcount_);
+            // printf("ANTIC read VCOUNT $%3d\n", vcount_ / 2);
             data = vcount_ / 2;
             break;
 
@@ -182,7 +196,14 @@ uint8_t __not_in_flash_func(antic_read)(uint8_t reg) {
             data = nmist_;
             break;
 
+        case PENH:
+        case PENV:
+            // not supported
+            data = 0;
+            break;
+
         default:
+            // printf("ANTIC read reg %x\n", reg);
             data = 0xFF;
             break;
     }
@@ -225,8 +246,6 @@ void __not_in_flash_func(antic_write)(uint8_t reg, uint8_t data) {
 
         case WSYNC:
             // used to synchronize cpu to horizontal sync
-            // experiment to wait till render function updates the
-            // vcount line counter
             if ((dmactl_ & 0x03) != 0) {
                 wsync_ = false;
                 while (!wsync_);
@@ -280,73 +299,115 @@ void __not_in_flash_func(antic_gen_vbi)() {
         mos65c02_nmi();
 #endif
     }
+    dl_suspend = false;
 }
 
 void __always_inline antic_gen_dli() {
     // dli clears vbi (ref Altirra HW guide pg72)
     nmist_ = 0x80;
+
     if (nmien_ & 0x80) {
-// dli is enabled, set vbi in NMIST and generate nmi
+        // dli is enabled, set vbi in NMIST and generate nmi
+
 #ifdef EMU_M6502
         cpu.nmi = true;
 #else
         mos65c02_nmi();
 #endif
+        // printf("DLI cpu cycles: %d\n", runticks);
     }
 }
 
-constexpr uint CHAR_COLS[4] = {0, 32, 40, 48};
+// constexpr uint CHAR_COLS[4] = {0, 32, 40, 48};
+constexpr uint CHAR_COLS[4] = {0, 32, 40, 40};
 constexpr uint CHAR_COLS_HSCROL[4] = {0, 40, 48, 48};
+constexpr uint CHAR_START_OFFSET[4] = {0, 0, 0, 4};
 
-void __not_in_flash_func(antic_render_scanline)(uint16_t* scanbuf, int line) {
+void __not_in_flash_func(antic_render_scanline)(uint16_t* __restrict__ scanbuf,
+                                                int line) {
     // antic lines go from 8 to 248 (ref: Altirra HW guide)
     antic_dl_start(line);
 
-#if !defined(OPTION_TMDS)
-    if (dl_data.hires) {
-        uint16_t col0 = colpf[2];
+    // if (dl_data.hires) {
+    //     uint16_t col0 = colpf[2];
 
-        // clear scanline buffer with background color
-        // memset16(scanbuf, col0, 320);
-        memset32_dma((uint32_t*)scanbuf, col0 | col0 << 16, 160);
-        // memset32((uint32_t*)scanbuf, (col0 << 16) | col0, 160);
+    //     // clear scanline buffer with background color
+    //     // memset16(scanbuf, col0, 320);
+    //     memset32_dma((uint32_t*)scanbuf, col0 | col0 << 16, 160);
+    //     // memset32((uint32_t*)scanbuf, (col0 << 16) | col0, 160);
 
-        pm_missile_scanline(scanbuf);
+    //     pm_missile_scanline(scanbuf);
 
-        // update scanline with rendered player graphics
-        pm_player_scanline(scanbuf);
-    }
+    //     // update scanline with rendered player graphics
+    //     pm_player_scanline(scanbuf);
+    // }
 
     // render playfield scanline
     (*render_scanline)(scanbuf);
 
-    if (!dl_data.hires) {
-        pm_missile_scanline(scanbuf);
+    // if (!dl_data.hires) {
+    pm_missile_scanline(scanbuf, dl_data.hires);
 
-        // // update scanline with rendered player graphics
-        pm_player_scanline(scanbuf);
+    // update scanline with rendered player graphics
+    pm_player_scanline(scanbuf);
+    // }
+}
+
+void __not_in_flash_func(antic_dl_start)(uint line) {
+    // fetch player missile data
+    const uint16_t pmbase_addr = (pmbase_ & 0xF8) << 8;
+    if (dmactl_ & (1 << DMACTL::MISSILE_DMA)) {
+        // grafm_ = mem_read(pmbase_addr + line + 8 + 768);
+        grafm_ = mem_read(pmbase_addr + line + 768);
     }
-#endif
+
+    // execute display list instruction
+    execute_dlist(line);
+    system_set_cputicks(dl_data.cpu_cycles);
+    // system_set_cputicks(104);  // typically 104 cycles in a line forgetting
+    // dma
+
+    // Altirra hardware reference section 4.8
+    // "To trigger a DLI, bit 7 should be set on a display list instruction.
+    // This causes ANTIC to fire an NMI at the start of
+    // the last scan line for that mode line."
+    if ((dl_data.dli == true) &&
+        (dl_data.current_scanline == dl_data.nbr_scanlines - 1)) {
+        antic_gen_dli();
+        // printf("dli line: %d max: %d curr%d mode:%d\n", line,
+        //        dl_data.nbr_scanlines, dl_data.current_scanline,
+        //        dl_data.mode);
+        system_wait_cputicks(6);
+    }
+
+    if (dmactl_ & (1 << DMACTL::PLAYER_DMA)) {
+        // Fetch Players bitmap
+        for (int i = 3; i >= 0; i--) {
+            // grafp_[i] = mem_read(pmbase_addr + line + 8 + 0x400 + 256 * i);
+            grafp_[i] = mem_read(pmbase_addr + line + 0x400 + 256 * i);
+        }
+    }
+
+    return;
 }
 
 void __not_in_flash_func(execute_dlist)(uint line) {
-    // called at end of each scanline to execute one displaylist instruction
-    static bool dl_suspend = false;
-
     // fetch display list instruction when the last line of the mode line
     // has been rendered
-    if (dl_data.scanline < dl_data.lastline + 1) {
+    if (dl_data.current_scanline < dl_data.nbr_scanlines) {
         return;
     }
 
-    // finished rendering one complete modeline
-    // reset scanline for the next line of the selected screenmode
-    dl_data.scanline = 0;
+    if (dl_suspend) {
+        // dispaly list processing is suspended till vbi
+        // vertical blank ends suspend
+        return;
+    }
 
     // increment pointer to screen data , note possibly reset when new lms
     // is done
     // screendata_ptr += bytes_scanline;
-    antic_screen_base += bytes_scanline;
+    antic_screen_base = antic_screen_base + bytes_scanline;
     screendata_ptr = mem_read_ptr(antic_screen_base);
 
     // antic_screen_base = antic_screen_base + bytes_scanline;
@@ -355,19 +416,21 @@ void __not_in_flash_func(execute_dlist)(uint line) {
     // dl_data.mode,
     //        window_mode_y_, dl_data.scanline, dl_data.lastline);
 
-    if (dl_suspend) {
-        if (line < 240) return;
-        dl_suspend = false;
-    }
-
     // ANTIC does not proces more then 240 instructions (240+8)
-    if (line > 239) return;
+    // if (line > 239 + 8) return;
+
+    // finished rendering last line of modeline
+    // reset scanline for the next line of the selected screenmode
+    dl_data.current_scanline = 0;
 
     // is displaylist dma on? ref altirra hardware manual
-    if (!(dmactl_ & (1 << DMACTL::DLIST_DMA))) return;
+    if (!(dmactl_ & (1 << DMACTL::DLIST_DMA))) {
+        // display list is off, no cycles are stolen by display dma
+        dl_data.cpu_cycles = 114;
+        return;
+    }
 
-    // on the last scanline of the scanline the display list
-    // executes an instruction
+    // fetch new display list instruction
     const uint8_t instr = mem_read(dl_counter);
 
     dl_data.dli = instr & (1 << 7);
@@ -376,11 +439,12 @@ void __not_in_flash_func(execute_dlist)(uint line) {
     dl_data.hscroll = instr & (1 << 4);
     dl_data.prev_vscroll = dl_data.vscroll;
     dl_data.vscroll = instr & (1 << 5);
+    dl_data.cpu_cycles = mode_data[dl_data.mode].cpu_cycles;
 
     //
     switch (dl_data.mode) {
         case 0:
-            dl_data.lastline = ((instr >> 4) & 0x07);
+            dl_data.nbr_scanlines = ((instr >> 4) & 0x07) + 1;
             dl_data.lms = false;
             dl_data.hires = false;
             dl_data.hscroll = dl_data.vscroll = dl_data.prev_vscroll = false;
@@ -389,7 +453,7 @@ void __not_in_flash_func(execute_dlist)(uint line) {
             break;
 
         case 1:
-            dl_data.lastline =
+            dl_data.nbr_scanlines =
                 0;  // render blank lines till the end of the frame
             dl_data.hires = false;
             render_scanline = blankline_prepare_scanbuf;
@@ -404,7 +468,7 @@ void __not_in_flash_func(execute_dlist)(uint line) {
             return;
 
         default:
-            dl_data.lastline = mode_data[dl_data.mode].lastline;
+            dl_data.nbr_scanlines = mode_data[dl_data.mode].scanlines;
             double_y = mode_data[dl_data.mode].double_y;
             render_scanline = mode_data[dl_data.mode].render_scanline;
             dl_data.hires = mode_data[dl_data.mode].hires;
@@ -431,123 +495,121 @@ void __not_in_flash_func(execute_dlist)(uint line) {
 
     // vertical scrolling messes with start and end of scanlines
     if (dl_data.vscroll && (!dl_data.prev_vscroll)) {
-        dl_data.scanline = vscrol_;
+        dl_data.current_scanline = vscrol_;
     } else if ((dl_data.prev_vscroll == 1) && (dl_data.vscroll == 0)) {
-        dl_data.lastline = vscrol_;
+        dl_data.nbr_scanlines = vscrol_;
     }
 
-    static uint8_t last_mode = 0;
+    //     static uint8_t last_mode = 0;
+    //     if (dl_data.mode != last_mode) {
+    //         printf(" DL mode %02x %1x %3d %2d dli:%d hscoll:%d\n",
+    //         dl_data.mode,
+    //                dl_data.lms, line, bytes_scanline, dl_data.dli,
+    //                dl_data.hscroll);
+    //         printf("sb: $%04X\n", antic_screen_base);
 
-    // if (dl_data.mode != last_mode) {
-    //     printf(" DL mode %02x %1x %3d %2d\n", dl_data.mode, dl_data.lms,
-    //     line,
-    //            bytes_scanline);
-    //     printf("sb: $%04X\n", antic_screen_base);
-
-    //     last_mode = dl_data.mode;
-    // }
-}
-
-void __not_in_flash_func(antic_dl_start)(uint line) {
-    // fetch player missile data
-    const uint16_t pmbase_addr = (pmbase_ & 0xF8) << 8;
-
-    if (dmactl_ & (1 << DMACTL::PLAYER_DMA)) {
-        // Fetch Players bitmap
-        for (int i = 3; i >= 0; i--) {
-            grafp_[i] = mem_read(pmbase_addr + line + 8 + 0x400 + 256 * i);
-        }
-    }
-
-    if (dmactl_ & (1 << DMACTL::MISSILE_DMA)) {
-        grafm_ = mem_read(pmbase_addr + line + 8 + 768);
-    }
-
-    // fetch new display list instruction
-    execute_dlist(line);
-
-    // Altirra hardware reference section 4.8
-    // "To trigger a DLI, bit 7 should be set on a display list instruction.
-    // This causes ANTIC to fire an NMI at the start of
-    // the last scan line for that mode line."
-    if ((dl_data.scanline == dl_data.lastline) && dl_data.dli) {
-        antic_gen_dli();
-    }
-
-    return;
+    //         last_mode = dl_data.mode;
+    //     }
 }
 
 void __not_in_flash_func(antic_dl_end)(uint line) {
-    wsync_ = true;
+    // printf("remaining ticks: %d\n", runticks);
+    if (!wsync_) {
+        // if (runticks == 0) printf("** RUNTICKS = 0\n");
 
-    // update vount
-    // ANTIC visible lines are from 8-248, screen display is from 0-240
-    // so add 8 to the vcount'er
-    vcount_ = line + 8;
+        wsync_ = true;
 
-    dl_data.scanline++;
+        system_wait_cputicks(10);
+    }
+
+    // update vcount
+    vcount_ = line;
+
+    dl_data.current_scanline++;
 }
 
 bool __always_inline has_overlap(uint8_t x1, uint8_t w1, uint8_t x2,
                                  uint8_t w2) {
-    if (((x1 >= x2) && (x1 <= x2 + w2)) &&
-        ((x1 + w1 >= x2) && (x1 + w1) <= (x2 + w2)))
-        return true;
+    // if (((x1 >= x2) && (x1 < x2 + w2)) ||
+    //     ((x1 + w1 >= x2) && (x1 + w1) < (x2 + w2)))
+    //     return true;
 
-    return false;
+    // return false;
+
+    return !((x1 + w1 <= x2) || (x1 >= x2 + w2));
 }
 
-void __not_in_flash_func(pm_missile_scanline)(uint16_t* pixbuf) {
+void __not_in_flash_func(pm_missile_scanline)(uint16_t* __restrict__ pixbuf,
+                                              bool hires) {
 #ifdef PLAYERMISSILE
 
     // Is GTIA Missiles DMA activated
     if (!(gractl_ & (1 << GRACTL::MISSILE_EN))) return;
 
+    if (grafm_ == 0)
+        // no missile pixels to display
+        return;
+
     const uint8_t graf = grafm_;
-    if (graf != 0) {
-        for (int i = 3; i >= 0; i--) {
-            if ((hposm_[i] < 0x30) || (hposm_[i] > 0xCF))
-                // Missile position is outside Normal size playfield
-                continue;
 
-            int xpos = (hposm_[i] - 0x30) * 2;
-            uint8_t missile = (graf >> (2 * i)) & 0x03;
-            if (missile) {
-                uint16_t color;
-                if (prior_ & (1 << 4))
-                    color = colpf[3];
-                else
-                    color = colpm_[i];
+    for (int missile_idx = 3; missile_idx >= 0; missile_idx--) {
+        if ((hposm_[missile_idx] < 0x30) || (hposm_[missile_idx] > 0xCF))
+            // Missile position is outside Normal size playfield
+            continue;
+        uint8_t missile = (graf >> (2 * missile_idx)) & 0x03;
+        if (missile == 0)
+            // no missile pixels to display
+            continue;
 
-                // render missile with correct size
-                const int sizep = sizem_ + 1;
-                for (int bit = 1; bit >= 0; bit--) {
-                    // for (int size = 0; size < sizep; size++) {
-                    if (missile & (1 << bit)) {
-                        // perform playfield to missile collision detection
-                        for (int pf = 0; pf < 4; pf++) {
-                            if (*(pixbuf + xpos) == colpf[pf]) {
-                                mxpf_[i] |= (1 << pf);
-                            }
-                        }
+        int xpos = (hposm_[missile_idx] - 0x30) * 2;
 
-                        // paint missile
-                        memset16(pixbuf + xpos, color, 2 * sizep);
+        uint8_t color;
+        if (prior_ & (1 << 4))
+            color = reg_colpf[3];
+        else
+            color = reg_colpm_[missile_idx];
+
+        // if (hires) color = (color & 0xF0) | (reg_colpf[1] & 0x0F);
+
+        const uint16_t missile_color = color2rgb(color);
+
+        // render missile with correct size
+        const int sizep = sizem_ + 1;
+        for (int bit = 1; bit >= 0; bit--) {
+            if (missile & (1 << bit)) {
+                // perform playfield to missile collision detection
+                for (int pf = 0; pf < 4; pf++) {
+                    if (*(pixbuf + xpos + bit) == colpf[pf]) {
+                        mxpf_[missile_idx] |= (1 << pf);
                     }
-                    xpos += 2 * sizep;
                 }
-                // perform missile to player collision detection
-                for (int player = 0; player < 4; player++) {
-                    if (grafp_[player] != 0)
-                        if (has_overlap(hposm_[i], 2, hposp_[player], 8))
-                            mxpl_[i] |= (1 << player);
+
+                if (hires) {
+                    // missile has lower prio then text
+                    for (int x = 0; x <= 2 * sizep; x++) {
+                        if (*(pixbuf + xpos + x) == colpf[2]) {
+                            // paint missile
+                            *(pixbuf + xpos + x) = missile_color;
+                        }
+                    }
+                } else {
+                    // paint lores mode missile pixel
+                    memset16(pixbuf + xpos, missile_color, 2 * sizep);
                 }
             }
+            xpos += 2 * sizep;
+        }
+
+        // perform missile to player collision detection
+        for (int player = 0; player < 4; player++) {
+            if (grafp_[player] != 0)
+                if (has_overlap(hposm_[missile_idx], 2, hposp_[player], 8))
+                    mxpl_[missile_idx] |= (1 << player);
         }
     }
 }
 
-void __not_in_flash_func(pm_player_scanline)(uint16_t* pixbuf) {
+void __not_in_flash_func(pm_player_scanline)(uint16_t* __restrict__ pixbuf) {
     // is GTIA Player DMA actived
     if (!(gractl_ & (1 << GRACTL::PLAYER_EN))) return;
 
@@ -559,63 +621,82 @@ void __not_in_flash_func(pm_player_scanline)(uint16_t* pixbuf) {
 
         uint8_t graf = grafp_[i];
         // for now only support DMA filled grafp_
-        if (graf != 0) {
-            int xpos = (hposp_[i] - 0x30) * 2;
-            const int sizep = sizep_[i] + 1;
-            uint16_t color = colpm_[i];
+        if (graf == 0) continue;
 
-            // multicolor player?
-            if (prior_ & (1 << PRIOR::MULTICOLOR_PLAYER)) {
-                if ((i == 0) && (grafp_[1] != 0))
-                    color = color2rgb(reg_colpm_[0] | reg_colpm_[1]);
-                if ((i == 2) && (grafp_[3] != 0))
-                    color = color2rgb(reg_colpm_[2] | reg_colpm_[3]);
-            }
+        int xpos = (hposp_[i] - 0x30) * 2;
+        const int sizep = sizep_[i] + 1;
+        uint16_t color = colpm_[i];
 
-            for (int bit = 7; bit >= 0; bit--) {
-                // for (int size = 0; size < sizep; size++) {
-                if (graf & (1 << bit)) {
-                    // perform playfield to player collision detection
-                    for (int pf = 0; pf < 4; pf++) {
-                        if (*(pixbuf + xpos) == colpf[pf]) {
-                            pxpf_[i] |= (1 << pf);
-                        }
-                    }
-
-                    memset16(pixbuf + xpos, color, 2 * sizep);
-                }
-                xpos += 2 * sizep;
-            }
-
-            // perform player to player collision detection
-            for (int_fast8_t player = 0; player < 4; player++) {
-                if (player != i) {
-                    if (grafp_[player] != 0)
-                        if (has_overlap(hposp_[i], 8, hposp_[player], 8))
-                            pxpl_[i] |= (1 << player);
-                }
-            }
+        // multicolor player?
+        if (prior_ & (1 << PRIOR::MULTICOLOR_PLAYER)) {
+            if ((i == 0) && (grafp_[1] != 0))
+                color = color2rgb(reg_colpm_[0] | reg_colpm_[1]);
+            if ((i == 2) && (grafp_[3] != 0))
+                color = color2rgb(reg_colpm_[2] | reg_colpm_[3]);
         }
+
+        for (int bit = 7; bit >= 0; bit--) {
+            // for (int size = 0; size < sizep; size++) {
+            if (graf & (1 << bit)) {
+                // perform playfield to player collision detection
+                for (int pf = 0; pf < 4; pf++) {
+                    if (*(pixbuf + xpos + bit) == colpf[pf]) {
+                        pxpf_[i] |= (1 << pf);
+                    }
+                }
+
+                memset16(pixbuf + xpos, color, 2 * sizep);
+            }
+            xpos += 2 * sizep;
+        }
+
+        // perform player to player collision detection
+        for (int player = i - 1; player >= 0; player--) {
+            // if (player == i) continue;
+            if (grafp_[player] == 0) continue;
+            if (pxpl_[i] & (1 << player)) continue;
+
+            // check if players pixels overlap
+            if (has_overlap(hposp_[i], 8, hposp_[player], 8)) {
+                int offset = hposp_[i] - hposp_[player];
+                // if (std::abs(offset) <= 7) {
+                // printf("offset: %d\n", offset);
+                if (offset > 0) {
+                    if ((grafp_[player] >> offset) & graf) {
+                        pxpl_[i] |= (1 << player);
+                        pxpl_[player] |= (1 << i);
+                    }
+                } else {
+                    if ((grafp_[player] << offset) & graf) {
+                        pxpl_[i] |= (1 << player);
+                        pxpl_[player] |= (1 << i);
+                    }
+                }
+            }
+            // }
+        }
+        // }
     }
 
 #endif
 }
 
 // antic text mode 2, basic mode 0, 40x24 hires text, 1,5 colors
-void __not_in_flash_func(mode_2_prepare_scanbuf)(uint16_t* pixbuf) {
+void __not_in_flash_func(mode_2_prepare_scanbuf)(
+    uint16_t* __restrict__ pixbuf) {
     // handle small wide playfield
     if ((dmactl_ & 0x03) == 1) {
         // handle small playfield
         pixbuf += (40 - 32) * 8 / 2;
     }
 
-    // const uint8_t* font =
-    //     mem_read_ptr(((antic_chbase & 0xFE) << 8) + (dl_data.scanline));
     const uint8_t* font =
-        mem_read_ptr(((antic_chbase & 0xFC) << 8) + (dl_data.scanline));
+        mem_read_ptr(((antic_chbase & CHBASE_MODE2345_MASK) << 8) +
+                     (dl_data.current_scanline));
 
-    const uint16_t col1 =
+    const uint16_t fg_color =
         color2rgb((reg_colpf[2] & 0xF0) | (reg_colpf[1] & 0x0F));
+    const uint16_t bg_color = colpf[2];
 
     // draw playfield
     for (uint i = 0; i < chars_scanline; ++i) {
@@ -627,7 +708,9 @@ void __not_in_flash_func(mode_2_prepare_scanbuf)(uint16_t* pixbuf) {
         for (int bit = 7; bit >= 0; bit--) {
             if (pixels & (1 << bit)) {
                 // color from PF2, luminance from PF1
-                *(pixbuf) = col1;
+                *(pixbuf) = fg_color;
+            } else {
+                *(pixbuf) = bg_color;
             }
             pixbuf++;
         }
@@ -647,8 +730,8 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
     uint16_t* pixbuf = scanbuf;
     pixbuf += ((40 - CHAR_COLS[dmactl_ & 0x03]) * 8 / 2);
 
-    uint8_t* font =
-        mem_read_ptr((antic_chbase << 8) + (dl_data.scanline / double_y));
+    uint8_t* font = mem_read_ptr(((antic_chbase & CHBASE_MODE2345_MASK) << 8) +
+                                 (dl_data.current_scanline / double_y));
 
     uint8_t chdata;
     uint8_t pixels;
@@ -718,18 +801,18 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
 // text mode 6, basic mode 1, 8x8 chars , 20x24, 5 colors; each pixel is a color
 // text mode 7, basic mode 2, 8x16 chars, 20x12, 5 colors
 //
-void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
-    uint16_t* scanbuf = pixbuf;
-
+void __not_in_flash_func(mode_6_prepare_scanbuf)(
+    uint16_t* __restrict__ pixbuf) {
     pixbuf += ((40 - CHAR_COLS[dmactl_ & 0x03]) * 8 / 2);
 
-    uint8_t* font = mem_read_ptr(((antic_chbase & 0xFE) << 8) +
-                                 ((dl_data.scanline / double_y)));
+    uint8_t* font = mem_read_ptr(((antic_chbase & CHBASE_MODE67_MASK) << 8) +
+                                 ((dl_data.current_scanline / double_y)));
 
     uint8_t chdata;
     uint8_t pixels;
 
-    uint start = 0;
+    // uint start = 0;
+    uint start = CHAR_START_OFFSET[dmactl_ & 0x03];
     uint scroll_offset = 0;
     uint end = chars_scanline;
 
@@ -737,7 +820,7 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
         // from a800 emulator github antic.c#3956
         // but here i is '2', otherwise spaceinvaders does not look and
         // align correctly
-        start = 2 - (hscrol_ / 8);
+        start += 2 - (hscrol_ / 8);
         end = start + chars_scanline;
 
         if (hscrol_) {
@@ -766,11 +849,11 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
     for (int i = start; i < end; i++) {
         chdata = *(screendata_ptr + i);
         pixels = *(font + (chdata & 0x3F) * 8);
-        uint8_t color = chdata >> 6;
+
         for (int bit = 7; bit >= 0; bit--) {
             if (pixels & (1 << bit)) {
-                *(pixbuf++) = colpf[color];
-                *(pixbuf++) = colpf[color];
+                *(pixbuf++) = colpf[(chdata >> 6)];
+                *(pixbuf++) = colpf[(chdata >> 6)];
             } else {
                 *(pixbuf++) = colbk_;
                 *(pixbuf++) = colbk_;
@@ -799,17 +882,15 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(uint16_t* pixbuf) {
 // Mode 8 Grafic mode , basic mode 3, 4 color 40x24
 // 10 bytes per scanline
 // 8 dl_data.scanlines per pixel
-void __not_in_flash_func(mode_8_prepare_scanbuf)(uint16_t* pixbuf) {
+void __not_in_flash_func(mode_8_prepare_scanbuf)(
+    uint16_t* __restrict__ pixbuf) {
     // handle small wide playfield
     if ((dmactl_ & 0x03) == 1) {
         // handle small playfield
         pixbuf += (40 - 32) * 8 / 2;
     }
 
-    palette[0] = colbk_;
-    palette[1] = colpf[0];
-    palette[2] = colpf[1];
-    palette[3] = colpf[2];
+    uint16_t palette[4] = {colbk_, colpf[0], colpf[1], colpf[2]};
 
     uint8_t* scrn = screendata_ptr;
 
@@ -837,8 +918,7 @@ void __not_in_flash_func(mode_8_prepare_scanbuf)(uint16_t* pixbuf) {
 
 void __not_in_flash_func(mode_B_prepare_scanbuf)(uint16_t* pixbuf) {
     uint8_t* scrn = screendata_ptr;
-    palette[0] = colbk_;
-    palette[1] = colpf[0];
+    uint16_t palette[2] = {colbk_, colpf[0]};
 
     // 8 pixels per byte, write pixels twice
     for (uint i = 0; i < chars_scanline; ++i) {
@@ -852,15 +932,12 @@ void __not_in_flash_func(mode_B_prepare_scanbuf)(uint16_t* pixbuf) {
     }
 }
 
-void __not_in_flash_func(mode_E_prepare_scanbuf)(uint16_t* scanbuf) {
-    uint16_t* pixbuf = scanbuf;
+void __not_in_flash_func(mode_E_prepare_scanbuf)(
+    uint16_t* __restrict__ pixbuf) {
     uint8_t* scrn = screendata_ptr;
-    palette[0] = colbk_;
-    palette[1] = colpf[0];
-    palette[2] = colpf[1];
-    palette[3] = colpf[2];
+    uint16_t palette[4] = {colbk_, colpf[0], colpf[1], colpf[2]};
 
-    for (int i = 0; i < chars_scanline; ++i) {
+    for (int i = CHAR_START_OFFSET[dmactl_ & 0x03]; i < chars_scanline; ++i) {
         uint8_t c = scrn[i];
 
         uint8_t color = (c >> 6) & 0x03;
@@ -883,12 +960,11 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
     uint16_t* pixbuf = scanbuf;
 
     uint8_t* scrn = screendata_ptr;
+    uint16_t palette[8];
 
     // mode f operates in multiple GTIA modes
     switch (prior_ >> 6) {
         case 0:
-            uint16_t
-                palette[2];  // local stack array is faster then global array?
             palette[0] = colpf[2];
             palette[1] =
                 color2rgb((reg_colpf[2] & 0xF0) | (reg_colpf[1] & 0x0F));
@@ -920,7 +996,6 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
                 // pixbuf += 8;
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
-
                 *(pixbuf++) = rgbcolor;
                 *(pixbuf++) = rgbcolor;
             }
@@ -982,10 +1057,12 @@ void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {
 
 void __not_in_flash_func(mode_0_prepare_scanbuf)(uint16_t* scanbuf) {
     const uint32_t col = (colbk_ << 16) | colbk_;
-    memset32_dma((uint32_t*)scanbuf, col, 160);
+    memset32((uint32_t*)scanbuf, col, 160);
+    // memset32_dma((uint32_t*)scanbuf, col, 160);
 }
 
 void __not_in_flash_func(blankline_prepare_scanbuf)(uint16_t* scanbuf) {
     const uint32_t col = (colbk_ << 16) | colbk_;
-    memset32_dma((uint32_t*)scanbuf, col, 160);
+    memset32((uint32_t*)scanbuf, col, 160);
+    // memset32_dma((uint32_t*)scanbuf, col, 160);
 }

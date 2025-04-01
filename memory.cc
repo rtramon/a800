@@ -38,8 +38,8 @@ extern uint8_t mspacman_rom[];
 
 //  64k RAM
 uint8_t mem[SIZE_64K];
-uint8_t basic_rom[SIZE_8K];
-// uint8_t* basic_rom = nullptr;
+// uint8_t basic_rom[SIZE_8K];
+uint8_t* basic_rom = nullptr;
 
 uint8_t* cart_rom = nullptr;
 uint16_t cart_start = 0xFFFF;
@@ -48,57 +48,20 @@ uint16_t cart_start = 0xFFFF;
 uint read_cnt = 0;
 uint write_cnt = 0;
 
-void inline NOP_LOOP(uint x) {
-    while (x--) asm volatile("nop\n");
-}
-
 void mem_reset() { memset(mem, 0, sizeof(mem)); }
 
 uint8_t* __m6502_func(mem_read_ptr)(uint16_t address) {
     if (address < 0xC000) {
-        if (trig3_ == 1) {
-            if (address >= cart_start)
-                return &cart_rom[address - cart_start];  // mem[address];
+        if (select_rom_cartridge) {
+            if (address >= cart_start) return &cart_rom[address - cart_start];
         }
 
-        if (address >= 0xA000) {
-            if ((regPORTB & (1 << 1)) == 0) {
+        //
+        // This is used when basic  is used
+        if (select_basicrom) {
+            if (address >= 0xA000) {
                 // printf("R BASIC ROM $%04x\n", address);
                 return &basic_rom[address - 0xA000];
-            }
-        }
-        if ((address >= 0x5000) && (address <= 0x57FF)) {
-            if ((regPORTB & (1 << 7)) == 0) {
-                // puts("MEM Region $5000 access");
-                // selfTest ROM is paged in
-                // printf("R SELF-TEST  %04x\n", address);
-                return &mem[address + 0x8000];
-            }
-        }
-    }
-    return &mem[address];
-}
-
-uint8_t __m6502_func(mem_read)(uint16_t address) {
-    // statistic number of read counter
-    // read_cnt++;
-    // printf("MEM R $%04X\n", address);
-
-    // if (address < 0x5000) return mem[address];
-
-    if (address > 0xD7FF) return mem[address];
-
-    if (address < 0xC000) {
-        // if (address < 0xD000) {
-        if (trig3_ == 1) {
-            if ((address >= cart_start)) return cart_rom[address - cart_start];
-        }
-
-        if ((regPORTB & (1 << 1)) == 0) {
-            // if (select_basicrom) {
-            if ((address >= 0xA000)) {
-                // printf("R BASIC ROM $%04x\n", address);
-                return basic_rom[address - 0xA000];
             }
         }
 
@@ -107,20 +70,55 @@ uint8_t __m6502_func(mem_read)(uint16_t address) {
                 // puts("MEM Region $5000 access");
                 // selfTest ROM is paged in
                 // printf("R SELF-TEST  %04x\n", address);
-                return mem[address + 0x8000];
+                return &mem[address + 0x8000];
+            }
+        }
+    }
+
+    return &mem[address];
+}
+
+uint8_t __m6502_func(mem_read)(uint16_t address) {
+    // printf("MEM R $%04X\n", address);
+
+    // all memory below $5000 is RAM
+    // if (address < 0x5000) return mem[address];
+
+    if (address < 0xC000) {
+        if (select_rom_cartridge) {
+            if ((address >= cart_start)) {
+                return cart_rom[address - cart_start];
             }
         }
 
+        if (select_basicrom) {
+            if ((address >= 0xA000)) {
+                // printf("R BASIC ROM $%04x\n", address);
+                return basic_rom[address - 0xA000];
+            }
+        }
+
+        if (select_selftestrom) {
+            // printf("regportb: %x\n", regPORTB & (1 << 1));
+            if ((address >= 0x5000) && (address <= 0x57FF)) {
+                // puts("MEM Region $5000 access");
+                // selfTest ROM is paged in
+                // printf("R SELF-TEST  %04x\n", address);
+                return mem[address + 0x8000];
+            }
+        }
         return mem[address];
     }
 
-    // check for custom chip access
-    // if (address >= 0xD000) {
-    // custom chip address range
-
+    // custom chip address range, in order of most accesses
     // GTIA custom chip
     if ((address >> 8) == 0xD0) {
+        // printf("GTIA Read addr %4X\n", address);
         return gtia_read(address & 0x1F);
+    }
+    // Antic custom chip
+    if ((address >> 8) == 0xD4) {
+        return antic_read(address & 0x0F);
     }
     // Pokey custom chip
     if ((address >> 8) == 0xD2) {
@@ -130,25 +128,21 @@ uint8_t __m6502_func(mem_read)(uint16_t address) {
     if ((address >> 8) == 0xD3) {
         return m6520_read(address & 0x03);
     }
-    // Antic custom chip
-    if ((address >> 8) == 0xD4) {
-        return antic_read(address & 0x0F);
-    }
+
     // Reserved for future use
     // else if ((address >= 0xD500) && (address <= 0xD7FF)) {
     //   // ignore for future enhancement
     // }
     // }
-
     return mem[address];
 }
 
 void __m6502_func(mem_write)(uint16_t address, uint8_t data) {
-    // statistics number of write counter
-    // write_cnt++;
-
+#if 0
+    // Treating writes to $5000 - $5800 is not needed
+    // because the rom code in remapped from basic to these locations
     if ((address >= 0x5000) && (address < 0x5800)) {
-        // puts("MEM Region $5000 access");
+        puts("MEM Region $5000 write");
         if (regPORTB & (1 << 7)) {
             // selfTest ROM is not paged in
             mem[address] = data;
@@ -157,26 +151,31 @@ void __m6502_func(mem_write)(uint16_t address, uint8_t data) {
         }
         return;
     }
+#endif
 
+#if 0
+    // cartridge sw seems to write of 0x8000, but 
+    // no ill effects were seen with the check removed
     if ((address >= 0x8000) && (address <= 0x9FFF)) {
-        if (trig3_ == 0) mem[address] = data;
-        // else
-        // printf("W CARTRIDGE ROM  $%04x: $%02x\n", address, data);
-        return;
-    }
-
-    if ((address >= 0xA000) && (address <= 0xBFFF)) {
-        if ((trig3_ == 0) || (regPORTB & (1 << 1))) {
-            // BASIC ROM disabled
+        if (trig3_ == 0)
             mem[address] = data;
-        }  // else {
-           //  printf("W BASIC ROM  $%04x: $%02x\n", address, data);
-        // }
+        else
+            printf("W CARTRIDGE ROM  $%04x: $%02x\n", address, data);
         return;
     }
+#endif
+
+    // if ((address >= 0xA000) && (address <= 0xBFFF)) {
+    //     if ((select_rom_cartridge == 0) || (regPORTB & (1 << 1))) {
+    //         // BASIC ROM disabled
+    //         mem[address] = data;
+    //     }  // else {
+    //        //  printf("W BASIC ROM  $%04x: $%02x\n", address, data);
+    //     // }
+    //     return;
+    // }
 
     // custom chip address range
-    // if ((address >= 0xD000) && (address <= 0xD7FF)) {
     if (address >= 0xD000) {
         if ((address >= 0xD000) && (address <= 0xD0FF)) {
             gtia_write(address & 0x1F, data);
@@ -212,7 +211,6 @@ void __m6502_func(mem_write)(uint16_t address, uint8_t data) {
 
     mem[address] = data;
 
-    // printf("PANIC WRITE TO ROM $%04x\n", address);
     return;
 }
 

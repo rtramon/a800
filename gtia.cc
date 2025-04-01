@@ -35,7 +35,7 @@ enum GTIA_READ_REG_t {
     TRIG2 = 0x12,
     TRIG3 = 0x13,
     PAL = 0x14,
-
+    CONSOL = 0x1F
 };
 
 enum GTIA_WRITE_REG_t {
@@ -70,15 +70,15 @@ enum GTIA_WRITE_REG_t {
     VDELAY = 0x1C,
     GRACTL = 0x1D,
     HITCLR = 0x1E,
-    CONSOL = 0x1F
+    // CONSOL = 0x1F
 };
 
 volatile uint8_t consol_;
-uint8_t prior_;
-uint16_t colbk_;
-uint8_t reg_colbk_;
-uint8_t trig0_, trig3_;
-uint16_t palette[9];
+volatile uint8_t prior_;
+volatile uint16_t colbk_;
+volatile uint8_t reg_colbk_;
+uint8_t trig0_, select_rom_cartridge;
+// uint16_t palette[9];
 uint8_t gractl_;
 uint8_t reg_colpf[4];
 uint16_t colpf[4];
@@ -107,11 +107,11 @@ void gtia_reset() {
     // #else
     //     trig3_ = 0;
     // #endif
-    trig3_ = 0;
+    select_rom_cartridge = false;
 
     colbk_ = 0;
-    memset(colpf, 0, sizeof(colpf));
-    memset(colpm_, 0, sizeof(colpm_));
+    memset((void*)colpf, 0, sizeof(colpf));
+    memset((void*)colpm_, 0, sizeof(colpm_));
     memset(mxpl_, 0, 4);
     memset(mxpf_, 0, 4);
     memset(pxpf_, 0, 4);
@@ -164,7 +164,7 @@ uint8_t __m6502_func(gtia_read)(uint8_t reg) {
 
         case TRIG3:  // indicates cartridge is inserted. not affected by basic
                      // rom
-            data = trig3_;
+            data = select_rom_cartridge;
             break;
 
         case CONSOL:  // used to read status of the console keys START, SELECT,
@@ -174,6 +174,7 @@ uint8_t __m6502_func(gtia_read)(uint8_t reg) {
             break;
 
         default:
+            // printf("GTIA read reg 0x%2X\n", reg);
             data = 0xFF;
             break;
     }
@@ -232,6 +233,7 @@ void __m6502_func(gtia_write)(uint8_t reg, uint8_t data) {
             break;
 
         case SIZEM:
+            // printf("GTIA sizem: %02X\n", data & 0x03);
             sizem_ = data & 0x03;
             break;
 
@@ -279,8 +281,7 @@ void __m6502_func(gtia_write)(uint8_t reg, uint8_t data) {
             break;
 
         case PRIOR:
-            extern int lines;
-            // printf("W GTIA PRIOR $%02x line:%d\n", data, lines);
+            // printf("W GTIA PRIOR $%02x\n", data);
             prior_ = data;
             break;
 

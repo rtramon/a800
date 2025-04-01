@@ -23,7 +23,7 @@ extern uint8_t prior_;
 extern uint8_t reg_colbk_;
 extern uint16_t colbk_;
 extern uint16_t palette[9];
-extern uint8_t trig0_, trig3_;
+extern uint8_t trig0_, select_rom_cartridge;
 extern uint8_t consol_;
 extern uint8_t gractl_;
 extern uint8_t reg_colpf[4];

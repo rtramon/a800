@@ -110,7 +110,6 @@ void __not_in_flash_func(stop_sound)(uint8_t chan) {
     if (chan < MAX_AUDIO_CHANNEL) {
         // pio_sm_put(AUDIO_PIO, chan, 0);
         pio_sm_put(AUDIO_PIO, chan, 0);
-        // pio_sm_exec(AUDIO_PIO, chan, pio_encode_jmp(audio_pio_offset));
     }
 }
 
@@ -118,9 +117,10 @@ void __not_in_flash_func(play_pokey_sound)(uint8_t chan) {
     if (!sound_is_enabled) return;
 
     // printf("chan %d f:$%02X c:$%02X\n", chan, audf[chan], audc[chan]);
+
+    // channel 1 and channel 2 combined
     if (audctl_ & (1 << AUDCTL::CH12)) {
         if (chan == AUDIO_CHANNEL2) {
-            // channel 1 and channel 2 combined
             // calculate 16 bit delay, if channel 2 volume is enabled
             uint top;
             if (audctl_ & (1 << AUDCTL::CH1_FAST_CLK))

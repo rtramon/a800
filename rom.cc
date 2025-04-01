@@ -1,9 +1,12 @@
 
+#include "rom.h"
+
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 
 #include "gtia.h"
+#include "m6520.h"
 #include "memory.h"
 
 #define ATARI_OS_START 0xC000
@@ -31,82 +34,48 @@ extern uint8_t spaceinvaders_rom[];
 extern uint8_t boulderdash_rom[];
 extern uint8_t mspacman_rom[];
 extern uint8_t starraiders_rom[];
+extern uint8_t qbert_rom[];
+extern uint8_t Galaxian_rom[];
 
-struct rom_info {
-    uint8_t* addr;
-    uint16_t start;
-};
-
-rom_info rom_table[] = {{nullptr, 0},
-                        {miner2049_rom, 0x8000},
-                        {pacman_rom, 0xA000},
-                        {spaceinvaders_rom, 0xA000},
-                        {boulderdash_rom, 0x8000},
-                        {donkeykong_rom, 0x8000},
-                        {pengo_rom, 0x8000},
-                        {mspacman_rom, 0x8000},
-                        {starraiders_rom, 0xA000},
-                        {salt205_rom, 0xA000}};
+rom_info romtable[MAXROMS] = {
+    {"BASIC", altirra_basic_rom, 0xA000, ROM_8K},
+    {"Miner 2049", miner2049_rom, 0x8000, 16384},
+    {"PacMan", pacman_rom, 0xA000, ROM_8K},
+    {"Space Invaders", spaceinvaders_rom, 0xA000, 8192},
+    {"BoulderDash", boulderdash_rom, 0x8000, 16384},
+    {"Donkey Kong", donkeykong_rom, 0x8000, 16384},
+    {"Pengo", pengo_rom, 0x8000, 16384},
+    {"Ms PacMan", mspacman_rom, 0x8000, 16384},
+    {"Star Raiders", starraiders_rom, 0xA000, ROM_8K},
+    {"SALT 2.05", salt205_rom, 0xA000, ROM_8K},
+    {"Qbert", qbert_rom, 0xA000, ROM_8K},
+    {"Galaxian", Galaxian_rom, 0xA000, ROM_8K}};
 
 void load_rom(int rom) {
-    printf("load_rom(%d)\n", rom);
+    printf("load_rom %s\n", romtable[rom].title);
+
+    memset(mem, 0, SIZE_64K);
 
     memcpy(mem + ATARI_OS_START, atari_xl_rom, ATARI_OS_LENGTH);
     // memcpy(mem + ATARI_OS_START, atari_xe_pal_rom, ATARI_OS_LENGTH);
 
     // memcpy(basic_rom, ataribas_rom, BASIC_ROM_LENGTH);
-    memcpy(basic_rom, altirra_basic_rom, BASIC_ROM_LENGTH);
-    // basic_rom = altirra_basic_rom;
+    // memcpy(basic_rom, altirra_basic_rom, BASIC_ROM_LENGTH);
+    basic_rom = altirra_basic_rom;
     // basic_rom = ataribas_rom;
 
-#if 0 
-    switch (rom) {
-        case 1:  // MINER 2049
-            cart_start = 0x8000;
-            cart_rom = miner2049_rom;
-            break;
-
-        case 2:  // pacman
-            // printf("copy pacman rom to ram\n");
-            cart_start = 0xA000;
-            cart_rom = pacman_rom;
-            break;
-
-        case 3:  // space invaders
-            // printf("copy spaceinvader rom to ram\n");
-            cart_start = 0xA000;
-            cart_rom = spaceinvaders_rom;
-            // memcpy(cart_rom, spaceinvaders_rom, ROM_8K);
-            break;
-
-        case 4:  // boulder dash
-            cart_start = 0x8000;
-            cart_rom = boulderdash_rom;
-            break;
-
-        case 5:  // donkey kong
-            cart_start = 0x8000;
-            cart_rom = donkeykong_rom;
-            break;
-
-        case 6:  // Pengo
-            cart_start = 0x8000;
-            cart_rom = pengo_rom;
-            break;
-
-        case 0:  // BASIC
-        default:
-            cart_start = 0xFFFF;
-            cart_rom = nullptr;
-            break;
-    }
-#endif
-    cart_start = rom_table[rom].start;
-    cart_rom = rom_table[rom].addr;
+    cart_start = romtable[rom].start;
+    cart_rom = romtable[rom].addr;
 
     // indicate ROM cartridge is inserted
-    if (rom != 0)
-        trig3_ = 1;
-    else
-        trig3_ = 0;
+    if (rom != 0) {
+        select_rom_cartridge = true;
+        select_basicrom = false;
+        // copy rom code to memory
+        // memcpy(mem + romtable[rom].start, romtable[rom].addr,
+        //        romtable[rom].size);
+    } else {
+        select_basicrom = true;
+        select_rom_cartridge = false;
+    }
 }

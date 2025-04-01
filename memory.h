@@ -10,8 +10,8 @@ constexpr int SIZE_16K = 16384;
 constexpr int SIZE_64K = 65536;
 
 extern uint8_t mem[SIZE_64K];
-extern uint8_t basic_rom[SIZE_8K];
-
+// extern uint8_t basic_rom[SIZE_8K];
+extern uint8_t* basic_rom;
 extern uint8_t* cart_rom;
 extern uint16_t cart_start;
 

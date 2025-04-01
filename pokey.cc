@@ -112,7 +112,12 @@ void pokey_reset() {
     random_ = 0;
 
     audctl_ = 0;
-    memset(audc, 0, 4);
+    memset(audf, 0, 4);
+    pokey_write(AUDC1, 0);
+    pokey_write(AUDC2, 0);
+    pokey_write(AUDC3, 0);
+    pokey_write(AUDC4, 0);
+
     // invisible registers
     cnt1_ = cnt2_ = cnt3_ = cnt4_ = 0xFF;
     aud_out = 0;
@@ -123,6 +128,7 @@ void pokey_reset() {
 
 uint8_t __not_in_flash_func(pokey_read)(uint8_t reg) {
     uint8_t data;
+    // printf("POKEY read reg %x\n", reg);
 
     switch (reg) {
         case POT0:  // value of paddle
@@ -363,7 +369,7 @@ void pokey_report_keycode(uint8_t code) {
 // void __not_in_flash_func(pokey_keyb_event)(uint8_t code) {
 void pokey_keyb_event(uint8_t code) {
     static bool escape = false;
-    printf("keybd code: $%02x\n", code);
+    // printf("keybd code: $%02x\n", code);
 
     // intercept escape key
     if (code == 0x1B) {

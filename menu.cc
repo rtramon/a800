@@ -2,11 +2,11 @@
 
 #include "gtia.h"
 #include "memory.h"
+#include "rom.h"
 #include "sound.h"
 #include "tusb.h"
 #include "tusb_config.h"
 
-#define MAXROMS 10
 const char *roms[MAXROMS] = {
     "BASIC",       "Miner 2049", "PACMAN",    "SPACE INVADERS", "Boulder Dash",
     "Donkey Kong", "Pengo",      "MS Pacman", "Star Raiders",   "SALT"};
@@ -35,6 +35,8 @@ void menu() {
 
     extern uint8_t regPORTA;
     extern uint8_t trig0_;
+    extern uint32_t runticks;
+    runticks = 0;
 
     init_display();
     print_banner();
@@ -60,18 +62,19 @@ void menu() {
         if (regPORTA != 0xFF) {
             print(0x4000 + 10 + rom * 40, " ");
 
-            if (!(regPORTA & (1)))  // UP
-                if (rom > 0)
+            if (!(regPORTA & (1))) {  // UP
+                if (rom > 0) {
                     rom--;
-                else
+                } else {
                     rom = MAXROMS - 1;
-
-            if (!(regPORTA & (1 << 1)))  // DOWN
+                }
+            }
+            if (!(regPORTA & (1 << 1))) {  // DOWN
                 if (rom < MAXROMS - 1)
                     rom++;
                 else
                     rom = 0;
-
+            }
             print(0x4000 + 10 + rom * 40, "*");
         }
 
@@ -81,9 +84,6 @@ void menu() {
             sleep_ms(20);
         }
     }
-
-    // for test force mspacman
-    // rom = 7;
 }
 
 void init_display() {
@@ -102,12 +102,12 @@ void init_display() {
         0x02, 0x02, 0x02,  // mode 2
         0x02, 0x02, 0x02,  // mode 2
 
-        0x41, 0x00, 0x10  // JVB, restart display list (@ 0x1000)
+        0x41, 0x00, 0x20  // JVB, restart display list (@ 0x1000)
     };
 
-    poke_n(0x1000, dlist, sizeof dlist);
+    poke_n(0x2000, dlist, sizeof dlist);
     poke(0xD402, 0);
-    poke(0xD403, 0x10);
+    poke(0xD403, 0x20);
 
     // initialize dmactl: enable dlist dma and normal wide
     poke(0xD400, (1 << 5) | (2));
@@ -122,7 +122,7 @@ void init_display() {
 
     // clear screen ram
     memset(mem + 0x3000, 0, 40);
-    memset(mem + 0x4000, 0, 400);
+    memset(mem + 0x4000, 0, 800);
 }
 
 void print_banner() {
@@ -131,7 +131,8 @@ void print_banner() {
     print(0x3014 + (20 - strlen(games)) / 2, games);
 
     // mode 2 text
-    for (int i = 0; i < MAXROMS; i++) print(0x4000 + 12 + i * 40, roms[i]);
+    for (int i = 0; i < MAXROMS; i++)
+        print(0x4000 + 12 + i * 40, romtable[i].title);
 
     print(0x4000 + 16 * 40 + (40 - strlen(press)) / 2, press);
 }

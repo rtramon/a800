@@ -8,6 +8,7 @@
 #include "mos65C02.h"
 #include "pico/stdlib.h"
 #include "sm0_memory_emulation_with_clock.pio.h"
+#include "system.h"
 
 // Externals
 
@@ -66,10 +67,15 @@ void mos65c02_init() {
     gpio_clr_mask((1ul << GP_RESET));
 }
 
+bool nmi = false;
 void __m6502_func(mos65c02_nmi)() {
+    nmi = true;
     // 6502 NMI is edge triggered
     gpio_clr_mask(1ul << GP_NMIB);
-    asm volatile("nop\nnop\nnop\nnop\n");
+    // delay a bit so that 6502 will recognize NMI
+    // pico @ 252Mhz take 4 ns per cycle,
+    // 6502 @ 2Mhz  requires > 60ns to detect NMI
+    busy_wait_at_least_cycles(60 / 4);
     gpio_set_mask(1ul << GP_NMIB);
 }
 
@@ -78,7 +84,7 @@ void __m6502_func(mos65c02_reset)() {
 
     gpio_clr_mask(1ul << GP_RESET);
 
-    sleep_us(100);
+    sleep_us(RESET_COUNT);
     gpio_set_mask(1ul << GP_RESET);
     puts("RESET released");
 }
@@ -93,8 +99,8 @@ void __m6502_func(mos65c02_tick)() {
     } value;
 
     ticks = ticks + 1;
+
     value.value = pio_sm_get_blocking(PIO_M65C02, PIO_SM_M65C02);
-    // printf("a:%04x\n", value.value & 0x0000FFFF);
     if (value.data.flags & 0x8) {  // 65C02 read
         pio_sm_put(PIO_M65C02, 3, mem_read(value.data.address));
     } else {

@@ -97,10 +97,7 @@ static __always_inline void my_dvi_prepare_scanline_16bpp(struct dvi_inst* inst,
 // buffer to hold 320 16bit color pixels representing one scanline
 // note: buffer is 16 pixels larger to cope with writing past the end
 // instead of checking (optimization)
-static uint16_t __aligned(4) scanbuf[FRAME_WIDTH + 16];
-// int lines;
-
-void mode_2_prepare_tmdsbuf(uint32_t*);
+static uint16_t __aligned(4) __scratch_x("scanbuf") scanbuf[FRAME_WIDTH + 16];
 
 void __dvi_func_x(core1_main)() {
     dvi_register_irqs_this_core(&dvi0, DMA_IRQ_0);
@@ -113,37 +110,43 @@ void __dvi_func_x(core1_main)() {
 
     uint32_t start = timer_hw->timerawl;
     while (true) {
+        // first 8 lines are not visible, but execute instruction and are
+        // counted in vcount
+        uint32_t vbi_ts = timer_hw->timerawl;
+
+        for (int lines = 0; lines < 8; lines++) {
+            update_vcount(lines);
+            system_wait_cputicks(105);
+        }
+
         // display list starts at line 8 and ends no later than scanline 248
-        for (int lines = 0; lines < FRAME_HEIGHT; lines++) {
-            // system_set_runticks(104);
-            system_set_runticks(90);
-
+        for (int lines = 8; lines < FRAME_HEIGHT + 8; lines++) {
             antic_render_scanline(scanbuf, lines);
-
             my_dvi_prepare_scanline_16bpp(&dvi0, (uint32_t*)&scanbuf);
-
             antic_dl_end(lines);
-            system_set_runticks(10);
-
-            // ensure some time for 6502 DLI routine to execute
-            // before the next scanline is drawn
-            // 240810: delay > 10 causes redlines in pacman
-            // 240818: delay < 6 causes graphic artifact space invaders
-            uint32_t line_ts = timer_hw->timerawl;
-            while (timer_hw->timerawl - line_ts < 8);
         }
 
         // puts("vbi");
-        uint32_t vbi_ts = timer_hw->timerawl;
         // handle once per frame /vsync stuff
-        antic_dl_start(240);
-        antic_dl_end(240);
+
+        // antic_dl_start(248);
+        // antic_dl_end(248);
 
         antic_gen_vbi();
-        system_set_runticks(20 * 114);
+
+        //  run the system for 22 more lines (ntsc) or 72 more lines in pal
+        for (int i = 248; i < 262; i++) {
+            update_vcount(i);
+            // system_wait_cputicks(90);
+            system_wait_cputicks(105);
+        }
+
+        // prevent 6502 from running to many instructions
+        // system_set_cputicks(0);
 
         // tinyusb host task
-        if (check_tuh) tuh_task();
+        // if (check_tuh)
+        tuh_task();
 
         // blink_cursor(frames);
         int key = getchar_timeout_us(0);
@@ -166,13 +169,6 @@ void __dvi_func_x(core1_main)() {
                            (float)ticks / (timer_hw->timerawl - start));
                     ticks = 0;
 
-                    // extern uint read_cnt, write_cnt;
-                    // printf("reads: %d, writes: %d read%: %d\n", read_cnt,
-                    //        write_cnt,
-                    //        (100 * read_cnt) / (read_cnt + write_cnt));
-                    // read_cnt = 0;
-                    // write_cnt = 0;
-
 #endif
                     start = timer_hw->timerawl;
                     break;
@@ -185,10 +181,9 @@ void __dvi_func_x(core1_main)() {
             }
         }
 
-        // ensure minimum vblank period
-        // 200 seems ok, too short means PF and PM do not line up correctly
-        while (timer_hw->timerawl - vbi_ts < 200);
-        // printf("vbi: %d\n", timer_hw->timerawl - vbi_ts);
+        // ensure minimum frame time
+        // 640x480 at 60Hz is approx 16.68 ms.
+        while (timer_hw->timerawl - vbi_ts < 16000);
     }
 }
 
@@ -210,9 +205,9 @@ int main() {
     // init DMA supported memcopy
     memcpy_dma_init();
 
-    for (int i = 0; i < 150; i++) {
+    for (int i = 0; i < 1500; i++) {
         tuh_task();
-        busy_wait_ms(10);
+        busy_wait_ms(1);
     }
 
     init_sound();
@@ -239,19 +234,11 @@ int main() {
     hw_set_bits(&bus_ctrl_hw->priority, BUSCTRL_BUS_PRIORITY_PROC1_BITS);
     multicore_launch_core1(core1_main);
 
-    // removing the following lines affects the correct generation
-    // of the dvi output
-    // not sure why
-    // for (int i = 0; i < 100; i++) {
-    //     tuh_task();
-    //     busy_wait_ms(10);
-    // }
-
     sem_release(&dvi_start_sem);
 
-    // puts("Starting 6502");
+    puts("Starting Atari 6502 Emulation");
     while (1) {
-        for (int i = 0; i < 4; i++) stop_sound(i);
+        system_reset();
         menu();
         play_sound(0, 400);
         sleep_ms(100);

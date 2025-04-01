@@ -6,9 +6,7 @@
 static uint8_t dma_fill_chan;
 static dma_channel_config chan_config;
 
-void
-memcpy_dma_init()
-{
+void memcpy_dma_init() {
     /* 4-byte DMA transfer width */
     dma_fill_chan = dma_claim_unused_channel(true);
     // dma_channel_config cfg32 = dma_channel_get_default_config(chan16);
@@ -29,24 +27,19 @@ memcpy_dma_init()
 //   dma_channel_start(chan32);
 // }
 
-void
-__not_in_flash_func(memset32_dma)(uint32_t* dst, uint32_t val, size_t cnt)
-{
-
-    dma_channel_configure(dma_fill_chan,
-                          &chan_config,
-                          dst,  // destination to set
-                          &val, // values to use
-                          cnt,  // cnt to set
-                          true  // start immediately
+void __not_in_flash_func(memset32_dma)(uint32_t* dst, uint32_t val,
+                                       size_t cnt) {
+    dma_channel_configure(dma_fill_chan, &chan_config,
+                          dst,   // destination to set
+                          &val,  // values to use
+                          cnt,   // cnt to set
+                          true   // start immediately
     );
 
     dma_channel_wait_for_finish_blocking(dma_fill_chan);
 }
 
-void
-__not_in_flash_func(memset_dma_ready)()
-{
+void __not_in_flash_func(memset_dma_ready)() {
     // wait for dma to finish
     dma_channel_wait_for_finish_blocking(dma_fill_chan);
 }
