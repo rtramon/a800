@@ -101,10 +101,12 @@ void __m6502_func(mos65c02_tick)() {
     ticks = ticks + 1;
 
     value.value = pio_sm_get_blocking(PIO_M65C02, PIO_SM_M65C02);
-    if (value.data.flags & 0x8) {  // 65C02 read
+    if (value.data.flags & 0x8) {  // 65C02 reads memory
         pio_sm_put(PIO_M65C02, 3, mem_read(value.data.address));
     } else {
-        uint8_t data = pio_sm_get_blocking(PIO_M65C02, PIO_SM_M65C02);
+        // 6502 writes to memory
+        // uint8_t data = pio_sm_get_blocking(PIO_M65C02, PIO_SM_M65C02);
+        uint8_t data = pio_sm_get(PIO_M65C02, PIO_SM_M65C02);
         mem_write(value.data.address, data);
     }
 }

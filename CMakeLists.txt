@@ -15,9 +15,9 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(sdkVersion 2.1.1)
+set(sdkVersion 2.2.0)
 set(toolchainVersion 14_2_Rel1)
-set(picotoolVersion 2.1.1)
+set(picotoolVersion 2.2.0)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
@@ -52,31 +52,22 @@ memory.cc
 antic.cc
 gtia.cc
 pokey.cc
-atarixl.cc
-atarixe.cc
-ataribas.cc
-atbasic158.cc
-donkeykong.cc
-pacman.cc
-boulderdash.cc
-miner_2049.cc
-pengo.cc
-spaceinvaders.cc
+
 usb_hid.cc
 emu_m6502.cc
 memcpy.cc
 #sound.cc
 sound_pio.cc
-salt205.cc
-mspacman_rom.cc
-starraiders.cc
-qbert.cc
-galaxian.cc
+
 main.cc
 )
 
+#add_library(roms)
+add_subdirectory(roms)
+
+
 pico_set_program_name(a800v1 "a800v1")
-pico_set_program_version(a800v1 "0.2")
+pico_set_program_version(a800v1 "0.3")
 
 # Generate PIO header
 #pico_generate_pio_header(a800v1 ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
@@ -112,9 +103,10 @@ target_compile_definitions(a800v1 PUBLIC
         #DVI_MONOCHROME_TMDS=1
         DVI_VERTICAL_REPEAT=2
         #TMDS_FULLRES_NO_INTERP_SAVE=1
-        DVI_N_TMDS_BUFFERS=5
+        #TMDS_FULLRES_NO_DC_BALANCE=1
+        DVI_N_TMDS_BUFFERS=3
         DVI_SYMBOLS_PER_WORD=2
-        #TMDS_ENCODE_UNROLL=1
+        TMDS_ENCODE_UNROLL=2
         PLAYERMISSILE
         #PAL_COLORS
         NTSC_COLORS
@@ -149,7 +141,7 @@ add_compile_options(
     -Wwrite-strings
     -Wall
     -Wno-unused-function
-    -O2
+    -O3
     -mcpu=cortex-m0plus
     -tune=cortex-m0plus
     #-funroll-loops

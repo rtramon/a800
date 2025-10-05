@@ -22,7 +22,7 @@ bool GLreset = false;
 M6502 cpu;
 #endif
 
-volatile uint runticks;
+uint runticks;
 
 // external declarations
 extern int rom;
@@ -71,7 +71,7 @@ void __m6502_func(system_reset)() {
 }
 
 void __m6502_func(system_wait_cputicks)(uint ticks) {
-    if (runticks < ticks) runticks = ticks;
+    // if (runticks < ticks) runticks = ticks;
 
     busy_wait_at_least_cycles(ticks * 252 / 1.79);
 }
@@ -92,20 +92,3 @@ void __m6502_func(system_run)() {
     }
     GLreset = false;
 }
-#if 0
-void __m6502_func(system_run)() {
-    while (!GLreset) {
-        uint32_t start = timer_hw->timerawl;
-        for (uint i = 0; i < 100; i++) {
-            pokey_tick();
-#ifdef EMU_M6502
-            m6502_step(&cpu);
-#else
-            mos65c02_tick();
-#endif
-        }
-        while (timer_hw->timerawl - start < 100'000 / 1789);
-    }
-    GLreset = false;
-}
-#endif

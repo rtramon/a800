@@ -216,7 +216,7 @@ void __not_in_flash_func(pokey_write)(uint8_t reg, uint8_t data) {
             break;
 
         case AUDCTL:
-            if (data != audctl_) printf("audctl $%02X\n", data);
+            // if (data != audctl_) printf("audctl $%02X\n", data);
             audctl_ = data;
             break;
 

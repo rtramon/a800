@@ -1,0 +1,18 @@
+target_sources(${PROJECT_NAME}
+    PRIVATE
+        ataribas.cc
+        atarixe.cc
+        atarixl.cc
+        atbasic158.cc
+        boulderdash.cc
+        donkeykong.cc
+        galaxian.cc
+        miner_2049.cc
+        mspacman_rom.cc
+        pacman.cc
+        pengo.cc
+        qbert.cc
+        salt205.cc
+        spaceinvaders.cc
+        starraiders.cc
+)

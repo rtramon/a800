@@ -116,6 +116,7 @@ void __dvi_func_x(core1_main)() {
 
         for (int lines = 0; lines < 8; lines++) {
             update_vcount(lines);
+            system_add_cputicks(105);
             system_wait_cputicks(105);
         }
 
@@ -138,14 +139,14 @@ void __dvi_func_x(core1_main)() {
         for (int i = 248; i < 262; i++) {
             update_vcount(i);
             // system_wait_cputicks(90);
+            system_add_cputicks(105);
             system_wait_cputicks(105);
         }
 
         // prevent 6502 from running to many instructions
-        // system_set_cputicks(0);
+        system_set_cputicks(0);
 
         // tinyusb host task
-        // if (check_tuh)
         tuh_task();
 
         // blink_cursor(frames);
@@ -188,8 +189,8 @@ void __dvi_func_x(core1_main)() {
 }
 
 int main() {
-    // vreg_set_voltage(VREG_VSEL);
-    // sleep_ms(10);
+    vreg_set_voltage(VREG_VSEL);
+    sleep_ms(10);
 
     set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);
 
@@ -197,7 +198,7 @@ int main() {
 
     stdio_init_all();
 
-    puts("\n\nNEO6502 Memory Emulator v0.02");
+    puts("\n\nNEO6502 Memory Emulator v0.3");
     printf("CPU Freq: %d Mhz\n", DVI_TIMING.bit_clk_khz / 1000);
 
     tuh_init(BOARD_TUH_RHPORT);
@@ -211,21 +212,13 @@ int main() {
     }
 
     init_sound();
-    // puts("pwm audio");
-    // sleep_ms(100);
-    // uint period = freq_to_period(440);
-    // for (uint i = 0; i < 2000; i++) {
-    //     play_sound_p(0, i, period - i);
-    //     sleep_ms(33);
-    //     printf("vol: %d\n", i);
-    // }
 
     // Reset Atari & 6502 core
     system_init();
 
     // initialize dvipico
     dvi0.timing = &DVI_TIMING;
-    dvi0.ser_cfg = pico_neo6502_cfg;
+    dvi0.ser_cfg = olimex_rp2040_cfg;  // old name: pico_neo6502_cfg;
     dvi_init(&dvi0, next_striped_spin_lock_num(), next_striped_spin_lock_num());
 
     // start service core
@@ -238,18 +231,15 @@ int main() {
 
     puts("Starting Atari 6502 Emulation");
     while (1) {
+        // show menu
         system_reset();
         menu();
         play_sound(0, 400);
         sleep_ms(100);
         stop_sound(0);
 
-        // ensure core1 check usb host task
-        check_tuh = true;
-
+        // run the system
         system_reset();
         system_run();
-
-        check_tuh = false;
     }
 }

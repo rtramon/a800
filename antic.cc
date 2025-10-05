@@ -321,7 +321,7 @@ void __always_inline antic_gen_dli() {
 // constexpr uint CHAR_COLS[4] = {0, 32, 40, 48};
 constexpr uint CHAR_COLS[4] = {0, 32, 40, 40};
 constexpr uint CHAR_COLS_HSCROL[4] = {0, 40, 48, 48};
-constexpr uint CHAR_START_OFFSET[4] = {0, 0, 0, 4};
+constexpr uint CHAR_START_OFFSET[4] = {0, 0, 0, 2};
 
 void __not_in_flash_func(antic_render_scanline)(uint16_t* __restrict__ scanbuf,
                                                 int line) {
@@ -343,23 +343,25 @@ void __not_in_flash_func(antic_render_scanline)(uint16_t* __restrict__ scanbuf,
     // }
 
     // render playfield scanline
-    (*render_scanline)(scanbuf);
+    if ((dmactl_ & 0x03) == 0) {
+        // playfield is disabled, show background color
+        blankline_prepare_scanbuf(scanbuf);
 
-    // if (!dl_data.hires) {
+    } else {
+        // render mode specific
+        (*render_scanline)(scanbuf);
+    }
+
     pm_missile_scanline(scanbuf, dl_data.hires);
 
     // update scanline with rendered player graphics
     pm_player_scanline(scanbuf);
+
     // }
 }
 
 void __not_in_flash_func(antic_dl_start)(uint line) {
-    // fetch player missile data
     const uint16_t pmbase_addr = (pmbase_ & 0xF8) << 8;
-    if (dmactl_ & (1 << DMACTL::MISSILE_DMA)) {
-        // grafm_ = mem_read(pmbase_addr + line + 8 + 768);
-        grafm_ = mem_read(pmbase_addr + line + 768);
-    }
 
     // execute display list instruction
     execute_dlist(line);
@@ -377,11 +379,17 @@ void __not_in_flash_func(antic_dl_start)(uint line) {
         // printf("dli line: %d max: %d curr%d mode:%d\n", line,
         //        dl_data.nbr_scanlines, dl_data.current_scanline,
         //        dl_data.mode);
-        system_wait_cputicks(6);
+        // system_wait_cputicks(6);
     }
 
+    // fetch player missile data
+    if (dmactl_ & (1 << DMACTL::MISSILE_DMA)) {
+        // grafm_ = mem_read(pmbase_addr + line + 8 + 768);
+        grafm_ = mem_read(pmbase_addr + line + 768);
+    }
+
+    // Fetch Players bitmap
     if (dmactl_ & (1 << DMACTL::PLAYER_DMA)) {
-        // Fetch Players bitmap
         for (int i = 3; i >= 0; i--) {
             // grafp_[i] = mem_read(pmbase_addr + line + 8 + 0x400 + 256 * i);
             grafp_[i] = mem_read(pmbase_addr + line + 0x400 + 256 * i);
@@ -399,8 +407,7 @@ void __not_in_flash_func(execute_dlist)(uint line) {
     }
 
     if (dl_suspend) {
-        // dispaly list processing is suspended till vbi
-        // vertical blank ends suspend
+        // display list processing is suspended till vbi ends
         return;
     }
 
@@ -500,16 +507,15 @@ void __not_in_flash_func(execute_dlist)(uint line) {
         dl_data.nbr_scanlines = vscrol_;
     }
 
-    //     static uint8_t last_mode = 0;
-    //     if (dl_data.mode != last_mode) {
-    //         printf(" DL mode %02x %1x %3d %2d dli:%d hscoll:%d\n",
-    //         dl_data.mode,
-    //                dl_data.lms, line, bytes_scanline, dl_data.dli,
-    //                dl_data.hscroll);
-    //         printf("sb: $%04X\n", antic_screen_base);
+    // static uint8_t last_mode = 0;
+    // if (dl_data.mode != last_mode) {
+    //     printf(" DL mode:%02x lms:%01x line:%3d b:%2d dli:%d hscoll:%d\n",
+    //            dl_data.mode, dl_data.lms, line, bytes_scanline, dl_data.dli,
+    //            dl_data.hscroll);
+    //     // printf("sb: $%04X\n", antic_screen_base);
 
-    //         last_mode = dl_data.mode;
-    //     }
+    //     last_mode = dl_data.mode;
+    // }
 }
 
 void __not_in_flash_func(antic_dl_end)(uint line) {
@@ -518,7 +524,7 @@ void __not_in_flash_func(antic_dl_end)(uint line) {
         // if (runticks == 0) printf("** RUNTICKS = 0\n");
 
         wsync_ = true;
-
+        // system_add_cputicks(10);
         system_wait_cputicks(10);
     }
 
@@ -539,12 +545,14 @@ bool __always_inline has_overlap(uint8_t x1, uint8_t w1, uint8_t x2,
     return !((x1 + w1 <= x2) || (x1 >= x2 + w2));
 }
 
+//
+// width of pm in colorclocks, indexed by sizep for players and sizem fo
+// missiles
+constexpr int PM_CLOCKS[4] = {1, 2, 1, 4};
+
 void __not_in_flash_func(pm_missile_scanline)(uint16_t* __restrict__ pixbuf,
                                               bool hires) {
 #ifdef PLAYERMISSILE
-
-    // Is GTIA Missiles DMA activated
-    if (!(gractl_ & (1 << GRACTL::MISSILE_EN))) return;
 
     if (grafm_ == 0)
         // no missile pixels to display
@@ -556,6 +564,7 @@ void __not_in_flash_func(pm_missile_scanline)(uint16_t* __restrict__ pixbuf,
         if ((hposm_[missile_idx] < 0x30) || (hposm_[missile_idx] > 0xCF))
             // Missile position is outside Normal size playfield
             continue;
+
         uint8_t missile = (graf >> (2 * missile_idx)) & 0x03;
         if (missile == 0)
             // no missile pixels to display
@@ -574,11 +583,13 @@ void __not_in_flash_func(pm_missile_scanline)(uint16_t* __restrict__ pixbuf,
         const uint16_t missile_color = color2rgb(color);
 
         // render missile with correct size
-        const int sizep = sizem_ + 1;
+        const int sizem =
+            PM_CLOCKS[sizem_] * 2;  // precomputed missile width in bytes;
         for (int bit = 1; bit >= 0; bit--) {
             if (missile & (1 << bit)) {
-                // perform playfield to missile collision detection
+                // check collision
                 for (int pf = 0; pf < 4; pf++) {
+                    // perform playfield to missile collision detection
                     if (*(pixbuf + xpos + bit) == colpf[pf]) {
                         mxpf_[missile_idx] |= (1 << pf);
                     }
@@ -586,7 +597,7 @@ void __not_in_flash_func(pm_missile_scanline)(uint16_t* __restrict__ pixbuf,
 
                 if (hires) {
                     // missile has lower prio then text
-                    for (int x = 0; x <= 2 * sizep; x++) {
+                    for (int x = 0; x <= sizem; x++) {
                         if (*(pixbuf + xpos + x) == colpf[2]) {
                             // paint missile
                             *(pixbuf + xpos + x) = missile_color;
@@ -594,37 +605,43 @@ void __not_in_flash_func(pm_missile_scanline)(uint16_t* __restrict__ pixbuf,
                     }
                 } else {
                     // paint lores mode missile pixel
-                    memset16(pixbuf + xpos, missile_color, 2 * sizep);
+                    memset16(pixbuf + xpos, missile_color, sizem);
                 }
             }
-            xpos += 2 * sizep;
+            xpos += sizem;
         }
+
+        // Todo: this prevents collision with missile as background for text
+        // in miner2049
+        if (hires) continue;
 
         // perform missile to player collision detection
         for (int player = 0; player < 4; player++) {
-            if (grafp_[player] != 0)
-                if (has_overlap(hposm_[missile_idx], 2, hposp_[player], 8))
-                    mxpl_[missile_idx] |= (1 << player);
+            if (grafp_[player] == 0) continue;
+            if (mxpl_[missile_idx] & (1 << player)) continue;
+
+            if (has_overlap(hposm_[missile_idx], 2, hposp_[player], 8)) {
+                mxpl_[missile_idx] |= (1 << player);
+            }
         }
     }
 }
 
 void __not_in_flash_func(pm_player_scanline)(uint16_t* __restrict__ pixbuf) {
     // is GTIA Player DMA actived
-    if (!(gractl_ & (1 << GRACTL::PLAYER_EN))) return;
+    // if (!(gractl_ & (1 << GRACTL::PLAYER_EN))) return;
 
     // Display Players
     for (int i = 3; i >= 0; i--) {
+        uint8_t graf = grafp_[i];
+        if (graf == 0) continue;
+
         if ((hposp_[i] < 0x30) || (hposp_[i] > 0xCF))
             // player position is outside Normal playfield size
             continue;
 
-        uint8_t graf = grafp_[i];
-        // for now only support DMA filled grafp_
-        if (graf == 0) continue;
-
         int xpos = (hposp_[i] - 0x30) * 2;
-        const int sizep = sizep_[i] + 1;
+        const int sizep = PM_CLOCKS[sizep_[i]];  // + 1;
         uint16_t color = colpm_[i];
 
         // multicolor player?
@@ -636,7 +653,6 @@ void __not_in_flash_func(pm_player_scanline)(uint16_t* __restrict__ pixbuf) {
         }
 
         for (int bit = 7; bit >= 0; bit--) {
-            // for (int size = 0; size < sizep; size++) {
             if (graf & (1 << bit)) {
                 // perform playfield to player collision detection
                 for (int pf = 0; pf < 4; pf++) {
@@ -651,25 +667,29 @@ void __not_in_flash_func(pm_player_scanline)(uint16_t* __restrict__ pixbuf) {
         }
 
         // perform player to player collision detection
-        for (int player = i - 1; player >= 0; player--) {
-            // if (player == i) continue;
+        for (int player = 3; player >= 0; player--) {
+            if (player == i) continue;
             if (grafp_[player] == 0) continue;
             if (pxpl_[i] & (1 << player)) continue;
 
             // check if players pixels overlap
-            if (has_overlap(hposp_[i], 8, hposp_[player], 8)) {
-                int offset = hposp_[i] - hposp_[player];
-                // if (std::abs(offset) <= 7) {
+            // if (has_overlap(hposp_[i], 8, hposp_[player], 8)) {
+            int offset = hposp_[player] - hposp_[i];
+            if (std::abs(offset) <= 7) {
                 // printf("offset: %d\n", offset);
                 if (offset > 0) {
                     if ((grafp_[player] >> offset) & graf) {
                         pxpl_[i] |= (1 << player);
-                        pxpl_[player] |= (1 << i);
+                        // pxpl_[player] |= (1 << i);
+                        // printf("collision player: %d with player: %d\n", i,
+                        // player);
                     }
                 } else {
-                    if ((grafp_[player] << offset) & graf) {
+                    if ((grafp_[player] << std::abs(offset)) & graf) {
                         pxpl_[i] |= (1 << player);
-                        pxpl_[player] |= (1 << i);
+                        // pxpl_[player] |= (1 << i);
+                        // printf("collision player: %d with player: %d\n", i,
+                        // player);
                     }
                 }
             }
@@ -706,13 +726,14 @@ void __not_in_flash_func(mode_2_prepare_scanbuf)(
         if ((c & 0x80) && (chactl_ & 0x03)) pixels ^= 0xFF;
 
         for (int bit = 7; bit >= 0; bit--) {
-            if (pixels & (1 << bit)) {
-                // color from PF2, luminance from PF1
-                *(pixbuf) = fg_color;
-            } else {
-                *(pixbuf) = bg_color;
-            }
-            pixbuf++;
+            // if (pixels & (1 << bit)) {
+            //     // color from PF2, luminance from PF1
+            //     *(pixbuf) = fg_color;
+            // } else {
+            //     *(pixbuf) = bg_color;
+            // }
+            // pixbuf++;
+            *(pixbuf++) = (pixels & (1 << bit)) ? fg_color : bg_color;
         }
     }
 }
@@ -803,6 +824,7 @@ void __not_in_flash_func(mode_4_prepare_scanbuf)(uint16_t* scanbuf) {
 //
 void __not_in_flash_func(mode_6_prepare_scanbuf)(
     uint16_t* __restrict__ pixbuf) {
+    // TODO : check wat next line doet
     pixbuf += ((40 - CHAR_COLS[dmactl_ & 0x03]) * 8 / 2);
 
     uint8_t* font = mem_read_ptr(((antic_chbase & CHBASE_MODE67_MASK) << 8) +
@@ -833,13 +855,17 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(
                 chdata = *(screendata_ptr + start++);
                 pixels = *(font + (chdata & 0x3F) * 8);
                 for (int bit = (scroll_offset - 1); bit >= 0; bit--) {
-                    if (pixels & (1 << bit)) {
-                        *(pixbuf++) = colpf[(chdata >> 6)];
-                        *(pixbuf++) = colpf[(chdata >> 6)];
-                    } else {
-                        *(pixbuf++) = colbk_;
-                        *(pixbuf++) = colbk_;
-                    }
+                    // if (pixels & (1 << bit)) {
+                    //     *(pixbuf++) = colpf[(chdata >> 6)];
+                    //     *(pixbuf++) = colpf[(chdata >> 6)];
+                    // } else {
+                    //     *(pixbuf++) = colbk_;
+                    //     *(pixbuf++) = colbk_;
+                    // }
+                    *(pixbuf++) =
+                        (pixels & (1 << bit)) ? colpf[chdata >> 6] : colbk_;
+                    *(pixbuf++) =
+                        (pixels & (1 << bit)) ? colpf[chdata >> 6] : colbk_;
                 }
             }
         }
@@ -850,6 +876,7 @@ void __not_in_flash_func(mode_6_prepare_scanbuf)(
         chdata = *(screendata_ptr + i);
         pixels = *(font + (chdata & 0x3F) * 8);
 
+#pragma GCC unroll 8
         for (int bit = 7; bit >= 0; bit--) {
             if (pixels & (1 << bit)) {
                 *(pixbuf++) = colpf[(chdata >> 6)];
@@ -937,7 +964,29 @@ void __not_in_flash_func(mode_E_prepare_scanbuf)(
     uint8_t* scrn = screendata_ptr;
     uint16_t palette[4] = {colbk_, colpf[0], colpf[1], colpf[2]};
 
-    for (int i = CHAR_START_OFFSET[dmactl_ & 0x03]; i < chars_scanline; ++i) {
+    uint start = CHAR_START_OFFSET[dmactl_ & 0x03];
+
+    if (dl_data.hscroll) {
+        start += 2 - (hscrol_ / 4);
+
+        // TODO: display partly scrolled first byte
+        uint scroll_offset = hscrol_ % 4;
+
+        // draw scrolled first character
+        if (scroll_offset) {
+            start--;
+            uint8_t pixels = scrn[start++];
+
+            for (int i = scroll_offset * 2; i > 0; i -= 2) {
+                uint8_t color = (pixels >> i) & 0x03;
+                *(pixbuf) = palette[color];
+                *(pixbuf + 1) = palette[color];
+                pixbuf += 2;
+            }
+        }
+    }
+    // display middle part
+    for (int i = start; i < chars_scanline; ++i) {
         uint8_t c = scrn[i];
 
         uint8_t color = (c >> 6) & 0x03;
@@ -954,6 +1003,8 @@ void __not_in_flash_func(mode_E_prepare_scanbuf)(
         *(pixbuf + 7) = palette[color];
         pixbuf += 8;
     }
+
+    // TODO: display partly scrolled last char
 }
 
 void __not_in_flash_func(mode_F_prepare_scanbuf)(uint16_t* scanbuf) {

@@ -100,6 +100,13 @@ void gtia_reset() {
     prior_ = 0;
     trig0_ = 0xFF;
     gractl_ = 0;
+    grafm_ = 0;
+    memset(grafp_, 0, 4);
+    memset(hposm_, 0, 4);
+    memset(hposp_, 0, 4);
+    memset(sizep_, 0, 4);
+    sizem_ = 0;
+
     // #if defined(PACMAN) || defined(DONKEY_KONG) || defined(MINER2049) ||    \
 //     defined(BOULDERDASH) || defined(PENGO) || defined(SPACEINVADERS) || \
 //     defined(MSPACMAN)
